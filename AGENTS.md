@@ -1,10 +1,18 @@
 # AI-assisted Haiku ARM64 port
 
-This repository is an experimental Haiku ARM64/QEMU port maintained with
-AI-assisted development. Agents are encouraged to inspect, build, test,
-diagnose, implement, and document changes proactively. Do not treat the use of
-AI as a reason to avoid modifying source code: make well-scoped changes, verify
-them, and report the evidence.
+This repository is an experimental Haiku ARM64/QEMU port maintained through
+**AI-first development**. The active, extensive use of AI is a project
+requirement, not merely an allowed convenience. Use AI throughout the entire
+project lifecycle: architecture and code analysis, implementation, debugging,
+test design, build recovery, performance work, documentation, review,
+refactoring, release preparation, and ongoing maintenance.
+
+Agents must work proactively. Do not treat the use of AI as a reason to avoid
+modifying source code, investigating a failure, or proposing an improvement:
+make well-scoped changes, verify them, report the evidence, and continue with
+the next safe step. Human direction sets goals and boundaries; AI should
+accelerate the work inside those boundaries rather than waiting for routine
+approval.
 
 ## Project goals
 
@@ -123,6 +131,12 @@ mirror. Commit each recipe fix separately in the HaikuPorts fork.
 - Before publishing an image, stop QEMU so the disk image is consistent.
 
 ## Agent workflow
+
+AI is expected to be the default engineering collaborator for every task,
+including tasks not explicitly listed in this file. Prefer evidence from source,
+build output, tests, and runtime logs over guesses. Use AI to turn that evidence
+into a concrete diagnosis, a minimal implementation, and a reproducible
+verification.
 
 1. Inspect the relevant diff, build status, and available disk space.
 2. Make the smallest change that addresses the observed failure.
