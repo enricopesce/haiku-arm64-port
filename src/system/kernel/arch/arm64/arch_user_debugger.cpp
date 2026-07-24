@@ -41,19 +41,43 @@ arch_update_thread_single_step()
 void
 arch_set_debug_cpu_state(const debug_cpu_state *cpuState)
 {
+	Thread* thread = thread_get_current_thread();
+	iframe_stack& iframes = thread->arch_info.iframes;
+	if (iframes.index == 0)
+		return;
+
+	iframe* frame = iframes.frames[iframes.index - 1];
+	memcpy(frame->x, cpuState->x, sizeof(frame->x));
+	frame->fp = cpuState->x[29];
+	frame->lr = cpuState->lr;
+	frame->sp = cpuState->sp;
+	frame->elr = cpuState->elr;
+	frame->spsr = cpuState->spsr;
 }
 
 
 void
 arch_get_debug_cpu_state(debug_cpu_state *cpuState)
 {
+	arch_get_thread_debug_cpu_state(thread_get_current_thread(), cpuState);
 }
 
 
 status_t
 arch_get_thread_debug_cpu_state(Thread *thread, debug_cpu_state *cpuState)
 {
-	return B_ERROR;
+	iframe_stack& iframes = thread->arch_info.iframes;
+	if (iframes.index == 0)
+		return B_BAD_DATA;
+
+	const iframe* frame = iframes.frames[iframes.index - 1];
+	memcpy(cpuState->x, frame->x, sizeof(frame->x));
+	cpuState->x[29] = frame->fp;
+	cpuState->lr = frame->lr;
+	cpuState->sp = frame->sp;
+	cpuState->elr = frame->elr;
+	cpuState->spsr = frame->spsr;
+	return B_OK;
 }
 
 

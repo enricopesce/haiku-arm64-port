@@ -122,6 +122,7 @@ virtio_pci_interrupt(void *data)
 	if (isr == 0)
 		return B_UNHANDLED_INTERRUPT;
 
+
 	if (isr & VIRTIO_PCI_ISR_CONFIG)
 		gVirtio->config_interrupt_handler(bus->sim);
 
@@ -590,6 +591,10 @@ notify_queue(void* cookie, uint16 queue)
 	virtio_pci_sim_info* bus = (virtio_pci_sim_info*)cookie;
 	if (queue >= bus->queue_count)
 		return;
+	// The available ring is normal memory while the notification is an MMIO
+	// doorbell. On weakly ordered architectures the descriptor updates must be
+	// globally visible before ringing that doorbell.
+	memory_full_barrier();
 	if (bus->virtio1) {
 		volatile uint16* notifyAddr = (volatile uint16*)(bus->notifyAddr + bus->notifyOffsets[queue]);
 		*notifyAddr = queue;

@@ -129,6 +129,9 @@ VirtioDevice::NegotiateFeatures(uint64 supported, uint64* negotiated,
 	fFeatures &= (VIRTIO_FEATURE_TRANSPORT_MASK
 		| VIRTIO_FEATURE_RING_INDIRECT_DESC | VIRTIO_FEATURE_RING_EVENT_IDX
 		| VIRTIO_FEATURE_VERSION_1);
+	// Event-index notification suppression is not implemented by VirtioQueue.
+	// Do not negotiate it: use the standard avail flags instead.
+	fFeatures &= ~VIRTIO_FEATURE_RING_EVENT_IDX;
 
 	_DumpFeatures("negotiated features", fFeatures, get_feature_name);
 

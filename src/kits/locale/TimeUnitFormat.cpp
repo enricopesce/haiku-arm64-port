@@ -114,6 +114,9 @@ status_t
 BTimeUnitFormat::Format(BString& buffer, const int32 value,
 	const time_unit_element unit) const
 {
+	if (fInitStatus != B_OK)
+		return fInitStatus;
+
 	if (unit < 0 || unit > B_TIME_UNIT_LAST)
 		return B_BAD_VALUE;
 

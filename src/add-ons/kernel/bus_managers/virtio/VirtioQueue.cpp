@@ -255,6 +255,11 @@ VirtioQueue::Dequeue(void** _cookie, uint32* _usedLength)
 	if (fRingUsedIndex == fRing.used->idx)
 		return false;
 
+	// The device updates the used element before publishing used->idx. Ensure
+	// those writes are visible before consuming the element on weakly ordered
+	// architectures.
+	memory_read_barrier();
+
 	uint16 usedIndex = fRingUsedIndex++ & (fRingSize - 1);
 	TRACE("Dequeue() usedIndex: %u\n", usedIndex);
 	struct vring_used_elem *element = &fRing.used->ring[usedIndex];
@@ -363,6 +368,8 @@ VirtioQueue::UpdateAvailable(uint16 index)
 	CALLED();
 	uint16 available = fRing.avail->idx & (fRingSize - 1);
 	fRing.avail->ring[available] = index;
+	// Publish the descriptor chain before making it visible to the device.
+	memory_write_barrier();
 	fRing.avail->idx++;
 }
 

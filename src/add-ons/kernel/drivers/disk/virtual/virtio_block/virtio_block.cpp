@@ -547,17 +547,14 @@ virtio_block_init_driver(device_node *node, void **cookie)
 {
 	CALLED();
 
-	virtio_block_driver_info* info = (virtio_block_driver_info*)malloc(
-		sizeof(virtio_block_driver_info));
+	virtio_block_driver_info* info = new(std::nothrow) virtio_block_driver_info();
 	if (info == NULL)
 		return B_NO_MEMORY;
-
-	memset(info, 0, sizeof(*info));
 
 	info->media_status = B_OK;
 	info->dma_resource = new(std::nothrow) DMAResource;
 	if (info->dma_resource == NULL) {
-		free(info);
+		delete info;
 		return B_NO_MEMORY;
 	}
 
@@ -568,7 +565,7 @@ virtio_block_init_driver(device_node *node, void **cookie)
 	if (info->bufferArea < B_OK) {
 		status_t status = info->bufferArea;
 		delete info->dma_resource;
-		free(info);
+		delete info;
 		return status;
 	}
 
@@ -577,7 +574,7 @@ virtio_block_init_driver(device_node *node, void **cookie)
 	if (status != B_OK) {
 		delete_area(info->bufferArea);
 		delete info->dma_resource;
-		free(info);
+		delete info;
 		return status;
 	}
 
@@ -600,7 +597,7 @@ virtio_block_uninit_driver(void *_cookie)
 	virtio_block_driver_info* info = (virtio_block_driver_info*)_cookie;
 	mutex_destroy(&info->lock);
 	delete_area(info->bufferArea);
-	free(info);
+	delete info;
 }
 
 

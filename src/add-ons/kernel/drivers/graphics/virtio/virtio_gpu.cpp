@@ -425,6 +425,13 @@ virtio_gpu_set_display_mode(virtio_gpu_driver_info* info, display_mode *mode)
 	if (status != B_OK)
 		return status;
 
+	// A resource must no longer be attached to a scanout before it can be
+	// released. QEMU rejects RESOURCE_UNREF otherwise, which made every mode
+	// change appear as an unknown mode to the Screen preferences application.
+	status = virtio_gpu_set_scanout(info, 0, 0, 0, 0);
+	if (status != B_OK)
+		return status;
+
 	status = virtio_gpu_unref(info, info->displayResourceId);
 	if (status != B_OK)
 		return status;
@@ -432,10 +439,6 @@ virtio_gpu_set_display_mode(virtio_gpu_driver_info* info, display_mode *mode)
 	info->displayResourceId = newResourceId;
 	info->displayWidth = mode->virtual_width;
 	info->displayHeight = mode->virtual_height;
-
-	status = virtio_gpu_set_scanout(info, 0, 0, 0, 0);
-	if (status != B_OK)
-		return status;
 
 	status = virtio_gpu_set_scanout(info, 0, info->displayResourceId, info->displayWidth, info->displayHeight);
 	if (status != B_OK)
@@ -454,9 +457,9 @@ virtio_gpu_set_display_mode(virtio_gpu_driver_info* info, display_mode *mode)
 		sharedInfo.frame_buffer_area = info->framebufferArea;
 		sharedInfo.frame_buffer = (uint8*)info->framebuffer;
 		sharedInfo.bytes_per_row = info->displayWidth * 4;
-		sharedInfo.current_mode.virtual_width = info->displayWidth;
-		sharedInfo.current_mode.virtual_height = info->displayHeight;
-		sharedInfo.current_mode.space = B_RGB32;
+		sharedInfo.current_mode = *mode;
+		sharedInfo.current_mode.h_display_start = 0;
+		sharedInfo.current_mode.v_display_start = 0;
 	}
 
 	return B_OK;

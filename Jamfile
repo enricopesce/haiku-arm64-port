@@ -34,6 +34,12 @@ AddHaikuImageSystemPackages [ FFilterByBuildFeatures
 		icu74_x86@secondary_x86
 	}@
 
+	minimum_image @{
+		glu
+		mesa
+		mesa_swpipe@!gcc2
+	}@
+
 	regular_image @{
 		bzip2
 		ffmpeg6

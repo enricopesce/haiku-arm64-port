@@ -182,7 +182,9 @@ SYSTEM_PREFERENCES = [ FFilterByBuildFeatures
 	VirtualMemory
 ] ;
 
-SYSTEM_DEMOS = ;
+SYSTEM_DEMOS = [ FFilterByBuildFeatures
+	GLTeapot@mesa
+] ;
 
 
 rule HaikuImageGetSystemLibs
@@ -199,9 +201,12 @@ rule HaikuImageGetSystemLibs
 			libdebug.so
 			libdebugger.so@primary
 			libdevice.so
+			libgame.so
 			libgnu.so
+			libmedia.so
 			libnetwork.so
 			libpackage.so
+			libscreensaver.so
 			libtextencoding.so
 			libtracker.so
 			libtranslation.so

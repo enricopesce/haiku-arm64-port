@@ -27,8 +27,7 @@ arch_debug_remove_interrupt_handler(uint32 line)
 int
 arch_debug_blue_screen_try_getchar(void)
 {
-	// TODO: Implement correctly!
-	return arch_debug_blue_screen_getchar();
+	return arch_debug_serial_try_getchar();
 }
 
 
@@ -42,8 +41,10 @@ arch_debug_blue_screen_getchar(void)
 int
 arch_debug_serial_try_getchar(void)
 {
-	// TODO: Implement correctly!
-	return arch_debug_serial_getchar();
+	if (sArchDebugUART == NULL)
+		return -1;
+
+	return sArchDebugUART->GetChar(false);
 }
 
 
@@ -53,7 +54,7 @@ arch_debug_serial_getchar(void)
 	if (sArchDebugUART == NULL)
 		return '\0';
 
-	return sArchDebugUART->GetChar(false);
+	return sArchDebugUART->GetChar(true);
 }
 
 

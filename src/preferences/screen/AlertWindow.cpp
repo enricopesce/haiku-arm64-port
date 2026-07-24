@@ -18,7 +18,6 @@
 #include <String.h>
 #include <TextView.h>
 #include <Window.h>
-#include <TimeUnitFormat.h>
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -103,9 +102,12 @@ AlertWindow::UpdateCountdownView()
 	string += "\n";
 	string += B_TRANSLATE("Settings will revert in %seconds.");
 
-	BTimeUnitFormat format;
 	BString tmp;
-	format.Format(tmp, fSeconds, B_TIME_UNIT_SECOND);
+	tmp << fSeconds << " ";
+	if (fSeconds == 1)
+		tmp << B_TRANSLATE("second");
+	else
+		tmp << B_TRANSLATE("seconds");
 
 	string.ReplaceFirst("%seconds", tmp);
 	// The below is black magic, do not touch. We really need to refactor

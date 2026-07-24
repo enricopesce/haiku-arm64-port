@@ -35,6 +35,41 @@ operator==(const display_mode &lhs, const display_mode &rhs)
 }
 
 
+static void
+normalize_mode_list()
+{
+	uint32 uniqueModeCount = 0;
+	for (uint32 i = 0; i < gInfo->shared_info->mode_count; i++) {
+		display_mode mode = gInfo->mode_list[i];
+
+		// Virtio GPU scanouts have no programmable hardware refresh timing.
+		// Expose one stable, nominal 60 Hz mode for each resolution.
+		if (compute_display_timing(mode.virtual_width, mode.virtual_height,
+				60.0f, false, &mode.timing) != B_OK) {
+			continue;
+		}
+		mode.h_display_start = 0;
+		mode.v_display_start = 0;
+
+		bool duplicate = false;
+		for (uint32 j = 0; j < uniqueModeCount; j++) {
+			const display_mode& existing = gInfo->mode_list[j];
+			if (existing.virtual_width == mode.virtual_width
+				&& existing.virtual_height == mode.virtual_height
+				&& existing.space == mode.space) {
+				duplicate = true;
+				break;
+			}
+		}
+
+		if (!duplicate)
+			gInfo->mode_list[uniqueModeCount++] = mode;
+	}
+
+	gInfo->shared_info->mode_count = uniqueModeCount;
+}
+
+
 /*!	Checks if the specified \a mode can be set using VESA. */
 static bool
 is_mode_supported(display_mode* mode)
@@ -73,6 +108,22 @@ create_mode_list(void)
 	if (gInfo->mode_list_area < 0)
 		return gInfo->mode_list_area;
 
+	normalize_mode_list();
+
+	// The kernel learns only the scanout dimensions from the device. Complete
+	// the current mode with the matching normalized mode.
+	for (uint32 i = 0; i < gInfo->shared_info->mode_count; i++) {
+		display_mode& mode = gInfo->mode_list[i];
+		if (mode.virtual_width
+				== gInfo->shared_info->current_mode.virtual_width
+			&& mode.virtual_height
+				== gInfo->shared_info->current_mode.virtual_height
+			&& mode.space == gInfo->shared_info->current_mode.space) {
+			gInfo->shared_info->current_mode = mode;
+			break;
+		}
+	}
+
 	gInfo->shared_info->mode_list_area = gInfo->mode_list_area;
 	return B_OK;
 }
@@ -101,6 +152,29 @@ virtio_gpu_get_mode_list(display_mode* modeList)
 
 
 status_t
+virtio_gpu_propose_display_mode(display_mode* target, const display_mode* low,
+	const display_mode* high)
+{
+	if (target == NULL)
+		return B_BAD_VALUE;
+
+	// Refresh timing is only compatibility metadata for a Virtio scanout.
+	// Match solely by dimensions and color space.
+	for (uint32 i = 0; i < gInfo->shared_info->mode_count; i++) {
+		display_mode& mode = gInfo->mode_list[i];
+		if (target->virtual_width == mode.virtual_width
+			&& target->virtual_height == mode.virtual_height
+			&& target->space == mode.space) {
+			*target = mode;
+			return B_OK;
+		}
+	}
+
+	return B_BAD_VALUE;
+}
+
+
+status_t
 virtio_gpu_get_preferred_mode(display_mode* _mode)
 {
 	TRACE(("virtio_gpu_get_preferred_mode()\n"));
@@ -114,11 +188,18 @@ status_t
 virtio_gpu_set_display_mode(display_mode* _mode)
 {
 	TRACE(("virtio_gpu_set_display_mode()\n"));
-	if (_mode != NULL && *_mode == gInfo->shared_info->current_mode)
+	if (_mode == NULL)
+		return B_BAD_VALUE;
+
+	display_mode mode = *_mode;
+	if (virtio_gpu_propose_display_mode(&mode, &mode, &mode) != B_OK)
+		return B_BAD_VALUE;
+
+	if (mode == gInfo->shared_info->current_mode)
 		return B_OK;
 
 	return ioctl(gInfo->device, VIRTIO_GPU_SET_DISPLAY_MODE,
-		_mode, sizeof(display_mode));
+		&mode, sizeof(display_mode));
 }
 
 
@@ -181,4 +262,3 @@ virtio_gpu_get_pixel_clock_limits(display_mode* mode, uint32* _low, uint32* _hig
 	*_high = clockLimit;
 	return B_OK;
 }
-

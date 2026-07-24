@@ -143,9 +143,11 @@ VMSAv8TranslationMap::~VMSAv8TranslationMap()
 	ThreadCPUPinner pinner(thread_get_current_thread());
 	InterruptsSpinLocker locker(sAsidLock);
 
-	vm_page_reservation reservation = {};
-	FreeTable(fPageTable, 0, fInitialLevel, &reservation);
-	vm_page_unreserve_pages(&reservation);
+	if (fPageTable != 0) {
+		vm_page_reservation reservation = {};
+		FreeTable(fPageTable, 0, fInitialLevel, &reservation);
+		vm_page_unreserve_pages(&reservation);
+	}
 
 	if (fASID != -1) {
 		sAsidMapping[fASID] = NULL;
@@ -245,8 +247,7 @@ VMSAv8TranslationMap::Unlock()
 addr_t
 VMSAv8TranslationMap::MappedSize() const
 {
-	panic("VMSAv8TranslationMap::MappedSize not implemented");
-	return 0;
+	return fMapCount;
 }
 
 
@@ -590,6 +591,7 @@ VMSAv8TranslationMap::Map(addr_t va, phys_addr_t pa, uint32 attributes, uint32 m
 				if (newPte == oldPte)
 					return;
 
+				bool wasMapped = (oldPte & kPteValidMask) != 0;
 				if ((oldPte & kPteValidMask) != 0) {
 					// ARM64 requires "break-before-make". We must set the PTE to an invalid
 					// entry and flush the TLB as appropriate before we can write the new PTE.
@@ -603,6 +605,8 @@ VMSAv8TranslationMap::Map(addr_t va, phys_addr_t pa, uint32 attributes, uint32 m
 				asm("isb");
 				if ((attributes & (B_EXECUTE_AREA | B_KERNEL_EXECUTE_AREA)) != 0)
 					arch_cpu_sync_icache((void*)(KERNEL_PMAP_BASE + effectivePa), B_PAGE_SIZE);
+				if (!wasMapped)
+					fMapCount++;
 				break;
 			}
 		});
@@ -628,6 +632,8 @@ VMSAv8TranslationMap::Unmap(addr_t start, addr_t end)
 		[=](uint64_t* ptePtr, uint64_t effectiveVa) {
 			ASSERT(effectiveVa <= end);
 			uint64_t oldPte = atomic_get_and_set64((int64_t*)ptePtr, 0);
+			if ((oldPte & kPteValidMask) != 0)
+				fMapCount--;
 			FlushVAIfAccessed(oldPte, effectiveVa);
 		});
 
@@ -650,6 +656,9 @@ VMSAv8TranslationMap::UnmapPage(VMArea* area, addr_t address,
 	ThreadCPUPinner pinner(thread_get_current_thread());
 	RecursiveLocker locker(fLock);
 
+	if (fPageTable == 0)
+		return B_ENTRY_NOT_FOUND;
+
 	uint64_t oldPte = 0;
 	ProcessRange(fPageTable, fInitialLevel, address, B_PAGE_SIZE, nullptr,
 		[=, &oldPte](uint64_t* ptePtr, uint64_t effectiveVa) {
@@ -661,6 +670,7 @@ VMSAv8TranslationMap::UnmapPage(VMArea* area, addr_t address,
 	if ((oldPte & kPteValidMask) == 0)
 		return B_ENTRY_NOT_FOUND;
 
+	fMapCount--;
 	pinner.Unlock();
 
 	if (_flags == NULL) {
@@ -693,6 +703,9 @@ VMSAv8TranslationMap::UnmapPages(VMArea* area, addr_t address, size_t size,
 	ThreadCPUPinner pinner(thread_get_current_thread());
 	RecursiveLocker locker(fLock);
 
+	if (fPageTable == 0)
+		return;
+
 	ProcessRange(fPageTable, fInitialLevel, address, size, nullptr,
 		[=, &queue](uint64_t* ptePtr, uint64_t effectiveVa) {
 			uint64_t oldPte = atomic_get_and_set64((int64_t*)ptePtr, 0);
@@ -700,6 +713,7 @@ VMSAv8TranslationMap::UnmapPages(VMArea* area, addr_t address, size_t size,
 			if ((oldPte & kPteValidMask) == 0)
 				return;
 
+			fMapCount--;
 			if (area->cache_type == CACHE_TYPE_DEVICE)
 				return;
 
@@ -748,12 +762,18 @@ VMSAv8TranslationMap::Query(addr_t va, phys_addr_t* pa, uint32* flags)
 	uint64_t pageMask = (1UL << fPageBits) - 1;
 	va &= ~pageMask;
 
+	if (fPageTable == 0)
+		return B_OK;
+
 	ThreadCPUPinner pinner(thread_get_current_thread());
 	ASSERT(ValidateVa(va));
 
 	ProcessRange(fPageTable, fInitialLevel, va, B_PAGE_SIZE, nullptr,
 		[=](uint64_t* ptePtr, uint64_t effectiveVa) {
 			uint64_t pte = atomic_get64((int64_t*)ptePtr);
+			if ((pte & kPteValidMask) == 0)
+				return;
+
 			*pa = pte & kPteAddrMask;
 			*flags |= PAGE_PRESENT | B_KERNEL_READ_AREA;
 			if (is_pte_accessed(pte))
@@ -799,17 +819,24 @@ VMSAv8TranslationMap::Protect(addr_t start, addr_t end, uint32 attributes, uint3
 	size_t size = end - start + 1;
 	ASSERT(ValidateVa(start));
 
+	if (fPageTable == 0)
+		return B_OK;
+
 	ThreadCPUPinner pinner(thread_get_current_thread());
 
 	ProcessRange(fPageTable, fInitialLevel, start, size, nullptr,
 		[=](uint64_t* ptePtr, uint64_t effectiveVa) {
 			ASSERT(effectiveVa <= end);
-			phys_addr_t pa = *ptePtr & kPteAddrMask;
+			phys_addr_t pa = 0;
 
 			// We need to use an atomic compare-swap loop because we must
 			// need to clear somes bits while setting others.
 			while (true) {
 				uint64_t oldPte = atomic_get64((int64_t*)ptePtr);
+				if ((oldPte & kPteValidMask) == 0)
+					return;
+
+				pa = oldPte & kPteAddrMask;
 				uint64_t newPte = oldPte & ~kPteAttrMask;
 				newPte |= attr;
 
@@ -844,7 +871,7 @@ VMSAv8TranslationMap::Protect(addr_t start, addr_t end, uint32 attributes, uint3
 				}
 			}
 
-			if ((attributes & (B_EXECUTE_AREA | B_KERNEL_EXECUTE_AREA)) != 0 && pa != 0)
+			if ((attributes & (B_EXECUTE_AREA | B_KERNEL_EXECUTE_AREA)) != 0)
 				arch_cpu_sync_icache((void*)(KERNEL_PMAP_BASE + pa), B_PAGE_SIZE);
 		});
 
@@ -863,19 +890,29 @@ VMSAv8TranslationMap::ClearFlags(addr_t va, uint32 flags)
 	if (!clearAF && !setRO)
 		return B_OK;
 
+	if (fPageTable == 0)
+		return B_OK;
+
 	ThreadCPUPinner pinner(thread_get_current_thread());
 
 	ProcessRange(fPageTable, fInitialLevel, va, B_PAGE_SIZE, nullptr,
 		[=](uint64_t* ptePtr, uint64_t effectiveVa) {
+			if ((atomic_get64((int64_t*)ptePtr) & kPteValidMask) == 0)
+				return;
+
 			if (clearAF && setRO) {
 				// We need to use an atomic compare-swap loop because we must
-				// need to clear one bit while setting the other.
+				// clear one bit while setting the other.
 				while (true) {
 					uint64_t oldPte = atomic_get64((int64_t*)ptePtr);
+					if ((oldPte & kPteValidMask) == 0)
+						return;
+
 					uint64_t newPte = oldPte & ~kAttrAF;
 					newPte = set_pte_clean(newPte);
 
-                    if ((uint64_t)atomic_test_and_set64((int64_t*)ptePtr, newPte, oldPte) == oldPte) {
+					if ((uint64_t)atomic_test_and_set64((int64_t*)ptePtr, newPte,
+							oldPte) == oldPte) {
 						FlushVAIfAccessed(oldPte, va);
 						break;
 					}
@@ -885,10 +922,14 @@ VMSAv8TranslationMap::ClearFlags(addr_t va, uint32 flags)
 			} else {
 				while (true) {
 					uint64_t oldPte = atomic_get64((int64_t*)ptePtr);
+					if ((oldPte & kPteValidMask) == 0)
+						return;
 					if (!is_pte_dirty(oldPte))
 						return;
+
 					uint64_t newPte = set_pte_clean(oldPte);
-                    if ((uint64_t)atomic_test_and_set64((int64_t*)ptePtr, newPte, oldPte) == oldPte) {
+					if ((uint64_t)atomic_test_and_set64((int64_t*)ptePtr, newPte,
+							oldPte) == oldPte) {
 						FlushVAIfAccessed(oldPte, va);
 						break;
 					}
@@ -912,14 +953,22 @@ VMSAv8TranslationMap::ClearAccessedAndModified(
 	RecursiveLocker locker(fLock);
 	ThreadCPUPinner pinner(thread_get_current_thread());
 
+	_modified = false;
+	if (fPageTable == 0)
+		return false;
+
 	uint64_t oldPte = 0;
+	bool found = false;
 	ProcessRange(fPageTable, fInitialLevel, address, B_PAGE_SIZE, nullptr,
-		[=, &oldPte](uint64_t* ptePtr, uint64_t effectiveVa) {
+		[=, &oldPte, &found](uint64_t* ptePtr, uint64_t effectiveVa) {
 			// We need to use an atomic compare-swap loop because we must
 			// first read the old PTE and make decisions based on the AF
 			// bit to proceed.
 			while (true) {
 				oldPte = atomic_get64((int64_t*)ptePtr);
+				if ((oldPte & kPteValidMask) == 0)
+					return;
+
 				uint64_t newPte = oldPte & ~kAttrAF;
 				newPte = set_pte_clean(newPte);
 
@@ -927,11 +976,19 @@ VMSAv8TranslationMap::ClearAccessedAndModified(
 				if (unmapIfUnaccessed && (oldPte & kAttrAF) == 0)
 					newPte = 0;
 
-				if ((uint64_t)atomic_test_and_set64((int64_t*)ptePtr, newPte, oldPte) == oldPte)
+				if ((uint64_t)atomic_test_and_set64((int64_t*)ptePtr, newPte,
+						oldPte) == oldPte) {
+					found = true;
+					if (newPte == 0 && (oldPte & kPteValidMask) != 0)
+						fMapCount--;
 					break;
+				}
 			}
 			asm("dsb ishst"); // Ensure PTE write completed
 		});
+
+	if (!found)
+		return false;
 
 	pinner.Unlock();
 	_modified = is_pte_dirty(oldPte);

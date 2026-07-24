@@ -36,6 +36,8 @@ get_accelerant_hook(uint32 feature, void* data)
 			return (void*)virtio_gpu_accelerant_mode_count;
 		case B_GET_MODE_LIST:
 			return (void*)virtio_gpu_get_mode_list;
+		case B_PROPOSE_DISPLAY_MODE:
+			return (void*)virtio_gpu_propose_display_mode;
 		case B_GET_PREFERRED_DISPLAY_MODE:
 			return (void*)virtio_gpu_get_preferred_mode;
 		case B_SET_DISPLAY_MODE:
@@ -52,4 +54,3 @@ get_accelerant_hook(uint32 feature, void* data)
 
 	return NULL;
 }
-

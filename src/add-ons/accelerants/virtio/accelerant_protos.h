@@ -27,6 +27,8 @@ sem_id virtio_gpu_accelerant_retrace_semaphore(void);
 // modes & constraints
 uint32 virtio_gpu_accelerant_mode_count(void);
 status_t virtio_gpu_get_mode_list(display_mode *dm);
+status_t virtio_gpu_propose_display_mode(display_mode* target,
+	const display_mode* low, const display_mode* high);
 status_t virtio_gpu_get_preferred_mode(display_mode *mode);
 status_t virtio_gpu_set_display_mode(display_mode *modeToSet);
 status_t virtio_gpu_get_display_mode(display_mode *currentMode);
