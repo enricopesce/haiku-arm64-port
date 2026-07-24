@@ -152,6 +152,12 @@ VMSAv8TranslationMap::~VMSAv8TranslationMap()
 	ThreadCPUPinner pinner(thread_get_current_thread());
 	InterruptsSpinLocker locker(sAsidLock);
 
+	if (fPageTable != 0) {
+		vm_page_reservation reservation = {};
+		FreeTable(fPageTable, 0, fInitialLevel, &reservation);
+		vm_page_unreserve_pages(&reservation);
+	}
+
 	if (fASID != -1) {
 		sAsidMapping[fASID] = NULL;
 		free_asid(fASID);
