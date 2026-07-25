@@ -62,7 +62,12 @@ int32
 arch_int_assign_to_cpu(int32 irq, int32 cpu)
 {
 	InterruptController* ic = InterruptController::Get();
-	return ic != NULL ? ic->SetInterruptAffinity(irq, cpu) : B_NO_INIT;
+	// The generic interrupt layer expects a CPU index here. Private
+	// interrupts cannot be routed by a GIC, so failure to change hardware
+	// affinity must not turn into a negative CPU index.
+	if (ic != NULL)
+		(void)ic->SetInterruptAffinity(irq, cpu);
+	return cpu;
 }
 
 
