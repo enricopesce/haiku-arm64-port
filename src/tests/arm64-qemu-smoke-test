@@ -14,11 +14,20 @@ image=$1
 qemu=${QEMU_SYSTEM_AARCH64:-qemu-system-aarch64}
 firmware=${QEMU_AARCH64_FIRMWARE:-}
 seconds=${QEMU_SMOKE_SECONDS:-25}
+cpus=${QEMU_SMOKE_CPUS:-4}
 
 if [ -z "$firmware" ]; then
 	echo "QEMU_AARCH64_FIRMWARE must name the EDK2 AArch64 firmware" >&2
 	exit 2
 fi
+
+case "$cpus" in
+	1|2|3|4) ;;
+	*)
+		echo "QEMU_SMOKE_CPUS must be between 1 and 4" >&2
+		exit 2
+		;;
+esac
 
 log=$(mktemp -t haiku-arm64-qemu-smoke.XXXXXX)
 pid=
@@ -34,7 +43,7 @@ cleanup()
 trap cleanup EXIT HUP INT TERM
 
 "$qemu" \
-	-machine virt,accel=hvf,acpi=off,gic-version=2 -cpu host -smp 4 -m 2048 \
+	-machine virt,accel=hvf,acpi=off,gic-version=2 -cpu host -smp "$cpus" -m 2048 \
 	-bios "$firmware" \
 	-drive if=none,file="$image",format=raw,id=drive0 \
 	-device virtio-blk-pci,drive=drive0,disable-legacy=on,vectors=0 \
@@ -49,7 +58,7 @@ pid=
 
 for marker in \
 	'kind: gicv2' \
-	'scheduler_init: found 4 logical cpus' \
+	"scheduler_init: found $cpus logical cpu" \
 	'Mounted boot partition: /dev/disk/virtual/virtio_block/0/1' \
 	'Volume::InitialVerify(): volume at "/boot/system" is consistent'; do
 	if ! LC_ALL=C grep -aF "$marker" "$log" >/dev/null; then
