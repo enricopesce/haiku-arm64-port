@@ -1,0 +1,62 @@
+#!/bin/sh
+#
+# Copyright 2026 Haiku, Inc. All rights reserved.
+# Distributed under the terms of the MIT License.
+
+set -eu
+
+if [ "$#" -ne 1 ]; then
+	echo "usage: $0 <haiku-mmc.image>" >&2
+	exit 2
+fi
+
+image=$1
+qemu=${QEMU_SYSTEM_AARCH64:-qemu-system-aarch64}
+firmware=${QEMU_AARCH64_FIRMWARE:-}
+seconds=${QEMU_SMOKE_SECONDS:-25}
+
+if [ -z "$firmware" ]; then
+	echo "QEMU_AARCH64_FIRMWARE must name the EDK2 AArch64 firmware" >&2
+	exit 2
+fi
+
+log=$(mktemp -t haiku-arm64-qemu-smoke.XXXXXX)
+pid=
+
+cleanup()
+{
+	if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+		kill "$pid" 2>/dev/null || true
+		wait "$pid" 2>/dev/null || true
+	fi
+	rm -f "$log"
+}
+trap cleanup EXIT HUP INT TERM
+
+"$qemu" \
+	-machine virt,accel=hvf,acpi=off,gic-version=2 -cpu host -smp 4 -m 2048 \
+	-bios "$firmware" \
+	-drive if=none,file="$image",format=raw,id=drive0 \
+	-device virtio-blk-pci,drive=drive0,disable-legacy=on,vectors=0 \
+	-device virtio-gpu-pci,disable-legacy=on,vectors=0 \
+	-display none -serial "file:$log" -monitor none -snapshot &
+pid=$!
+
+sleep "$seconds"
+kill "$pid" 2>/dev/null || true
+wait "$pid" 2>/dev/null || true
+pid=
+
+for marker in \
+	'kind: gicv2' \
+	'scheduler_init: found 4 logical cpus' \
+	'Mounted boot partition: /dev/disk/virtual/virtio_block/0/1' \
+	'Volume::InitialVerify(): volume at "/boot/system" is consistent'; do
+	if ! LC_ALL=C grep -aF "$marker" "$log" >/dev/null; then
+		echo "missing boot marker: $marker" >&2
+		LC_ALL=C tail -100 "$log" >&2 || true
+		exit 1
+	fi
+done
+
+echo "ARM64 QEMU smoke test passed"
