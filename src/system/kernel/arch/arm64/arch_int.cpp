@@ -61,8 +61,8 @@ arch_int_disable_io_interrupt(int32 irq)
 int32
 arch_int_assign_to_cpu(int32 irq, int32 cpu)
 {
-	// Not yet supported.
-	return 0;
+	InterruptController* ic = InterruptController::Get();
+	return ic != NULL ? ic->SetInterruptAffinity(irq, cpu) : B_NO_INIT;
 }
 
 

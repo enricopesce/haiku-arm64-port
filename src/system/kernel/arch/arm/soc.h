@@ -14,6 +14,10 @@ class InterruptController {
 public:
 	virtual void EnableInterrupt(int32 irq) = 0;
 	virtual void DisableInterrupt(int32 irq) = 0;
+	virtual status_t SetInterruptAffinity(int32 irq, int32 cpu)
+	{
+		return B_UNSUPPORTED;
+	}
 
 	virtual void HandleInterrupt() = 0;
 

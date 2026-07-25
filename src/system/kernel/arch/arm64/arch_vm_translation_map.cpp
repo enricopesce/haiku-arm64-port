@@ -55,6 +55,7 @@ arch_vm_translation_map_init(kernel_args* args, VMPhysicalPageMapper** _physical
 	memset((void*) (KERNEL_PMAP_BASE + READ_SPECIALREG(TTBR0_EL1)), 0, B_PAGE_SIZE);
 
 	uint64_t mair = READ_SPECIALREG(MAIR_EL1);
+	uint64_t mmfr0 = READ_SPECIALREG(ID_AA64MMFR0_EL1);
 	uint64_t mmfr1 = READ_SPECIALREG(ID_AA64MMFR1_EL1);
 	uint64_t mmfr2 = READ_SPECIALREG(ID_AA64MMFR2_EL1);
 
@@ -72,6 +73,7 @@ arch_vm_translation_map_init(kernel_args* args, VMPhysicalPageMapper** _physical
 	}
 
 	VMSAv8TranslationMap::fMair = mair;
+	VMSAv8TranslationMap::InitAsidAllocator(mmfr0);
 
 	*_physicalPageMapper = new (&sPhysicalPageMapperData) PMAPPhysicalPageMapper();
 

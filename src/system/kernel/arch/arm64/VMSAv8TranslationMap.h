@@ -95,6 +95,7 @@ public:
 	static uint32_t fHwFeature;
 	static uint64_t fMair;
 
+	static void InitAsidAllocator(uint64_t mmfr0);
 	static uint64_t GetMemoryAttr(uint32 attributes, uint32 memoryType, bool isKernel);
 	static int CalcStartLevel(int vaBits, int pageBits);
 

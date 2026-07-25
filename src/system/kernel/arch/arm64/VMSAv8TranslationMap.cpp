@@ -26,27 +26,22 @@ uint32_t VMSAv8TranslationMap::fHwFeature;
 uint64_t VMSAv8TranslationMap::fMair;
 
 // ASID Management
-static constexpr size_t kAsidBits = 8;
-static constexpr size_t kNumAsids = (1 << kAsidBits);
+static constexpr size_t kMinAsidBits = 8;
+static constexpr size_t kMaxAsidBits = 16;
+static constexpr size_t kMaxNumAsids = (1 << kMaxAsidBits);
 static spinlock sAsidLock = B_SPINLOCK_INITIALIZER;
 // A bitmap to track which ASIDs are in use.
-static uint64 sAsidBitMap[kNumAsids / 64] = {};
+static uint64 sAsidBitMap[kMaxNumAsids / 64] = {};
 // A mapping from ASID to translation map.
-static VMSAv8TranslationMap* sAsidMapping[kNumAsids] = {};
+static VMSAv8TranslationMap* sAsidMapping[kMaxNumAsids] = {};
+static size_t sNumAsids = (1 << kMinAsidBits);
 
 
 static void
 free_asid(size_t asid)
 {
-	for (size_t i = 0; i < B_COUNT_OF(sAsidBitMap); ++i) {
-		if (asid < 64) {
-			sAsidBitMap[i] &= ~(uint64_t{1} << asid);
-			return;
-		}
-		asid -= 64;
-	}
-
-	panic("Could not free ASID!");
+	ASSERT(asid < sNumAsids);
+	sAsidBitMap[asid / 64] &= ~(uint64_t{1} << (asid % 64));
 }
 
 
@@ -64,7 +59,7 @@ static size_t
 alloc_first_free_asid(void)
 {
 	int asid = 0;
-	for (size_t i = 0; i < B_COUNT_OF(sAsidBitMap); ++i) {
+	for (size_t i = 0; i < sNumAsids / 64; ++i) {
 		int avail = __builtin_ffsll(~sAsidBitMap[i]);
 		if (avail != 0) {
 			sAsidBitMap[i] |= (uint64_t{1} << (avail-1));
@@ -74,7 +69,7 @@ alloc_first_free_asid(void)
 		asid += 64;
 	}
 
-	return kNumAsids;
+	return sNumAsids;
 }
 
 
@@ -131,6 +126,14 @@ VMSAv8TranslationMap::VMSAv8TranslationMap(
 }
 
 
+void
+VMSAv8TranslationMap::InitAsidAllocator(uint64_t mmfr0)
+{
+	if (ID_AA64MMFR0_ASID_BITS(mmfr0) == ID_AA64MMFR0_ASID_BITS_16)
+		sNumAsids = kMaxNumAsids;
+}
+
+
 VMSAv8TranslationMap::~VMSAv8TranslationMap()
 {
 	TRACE("-VMSAv8TranslationMap(%p)\n", this);
@@ -184,7 +187,7 @@ VMSAv8TranslationMap::SwitchUserMap(VMSAv8TranslationMap *from, VMSAv8Translatio
 	}
 
 	size_t allocatedAsid = alloc_first_free_asid();
-	if (allocatedAsid != kNumAsids) {
+	if (allocatedAsid != sNumAsids) {
 		to->fASID = allocatedAsid;
 		sAsidMapping[allocatedAsid] = to;
 
@@ -193,7 +196,7 @@ VMSAv8TranslationMap::SwitchUserMap(VMSAv8TranslationMap *from, VMSAv8Translatio
 		return;
 	}
 
-	for (size_t i = 0; i < kNumAsids; ++i) {
+	for (size_t i = 0; i < sNumAsids; ++i) {
 		if (sAsidMapping[i]->fRefcount == 0) {
 			sAsidMapping[i]->fASID = -1;
 			to->fASID = i;
@@ -697,6 +700,9 @@ VMSAv8TranslationMap::UnmapPages(VMArea* area, addr_t address, size_t size,
 	TRACE("VMSAv8TranslationMap::UnmapPages(0x%" B_PRIxADDR "(%s), 0x%"
 		B_PRIxADDR ", 0x%" B_PRIxSIZE ", %d)\n", (addr_t)area,
 		area->name, address, size, updatePageQueue);
+
+	if (size == 0)
+		return;
 
 	ASSERT(ValidateVa(address));
 	VMAreaMappings queue;

@@ -38,6 +38,9 @@ arch_cpu_init_percpu(kernel_args *args, int curr_cpu)
 	}
 
 	WRITE_SPECIALREG(TCR_EL1, tcr);
+	// TCR_EL1 controls address translation. Synchronize the change before
+	// this CPU can execute code using the updated translation regime.
+	asm volatile("isb" ::: "memory");
 
 	gCPU[curr_cpu].arch.mpidr = READ_SPECIALREG(MPIDR_EL1);
 
@@ -111,17 +114,44 @@ arch_cpu_sync_icache(void *address, size_t len)
 }
 
 
+static inline void
+invalidate_global_tlb_page(addr_t address)
+{
+	// TLBI VAAE1IS uses the virtual address in bits [55:12].
+	uint64_t operand = (address >> 12) & ((1ULL << 44) - 1);
+	asm volatile("tlbi vaae1is, %0" :: "r"(operand) : "memory");
+}
+
+
 void
 arch_cpu_invalidate_tlb_range(intptr_t, addr_t start, addr_t end)
 {
-	arch_cpu_global_tlb_invalidate();
+	if (end < start)
+		return;
+
+	asm volatile("dsb ishst" ::: "memory");
+	for (addr_t address = ROUNDDOWN(start, B_PAGE_SIZE);;) {
+		invalidate_global_tlb_page(address);
+		// end is inclusive. Avoid wrapping when it lies in the last page
+		// of the address space.
+		if (end - address < B_PAGE_SIZE)
+			break;
+		address += B_PAGE_SIZE;
+	}
+	asm volatile("dsb ish\n\tisb" ::: "memory");
 }
 
 
 void
 arch_cpu_invalidate_tlb_list(intptr_t, addr_t pages[], int num_pages)
 {
-	arch_cpu_global_tlb_invalidate();
+	if (num_pages <= 0)
+		return;
+
+	asm volatile("dsb ishst" ::: "memory");
+	for (int i = 0; i < num_pages; i++)
+		invalidate_global_tlb_page(pages[i]);
+	asm volatile("dsb ish\n\tisb" ::: "memory");
 }
 
 

@@ -14,6 +14,7 @@ public:
 	GICv2InterruptController(phys_addr_t gicd_regs = 0, phys_addr_t gicc_regs = 0);
 	void EnableInterrupt(int32 irq);
 	void DisableInterrupt(int32 irq);
+	status_t SetInterruptAffinity(int32 irq, int32 cpu);
 	void HandleInterrupt();
 	void SendMulticastIci(CPUSet& cpuSet);
 	void SendBroadcastIci();
@@ -24,6 +25,7 @@ private:
 
 	volatile uint32_t *fGicdRegs;
 	volatile uint32_t *fGiccRegs;
+	uint32 fMaxIrq;
 };
 
 #endif /* ARCH_ARM_GICV2_H */

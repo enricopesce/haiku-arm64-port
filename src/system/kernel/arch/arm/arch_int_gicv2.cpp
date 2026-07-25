@@ -9,6 +9,7 @@
 #include <vm/vm.h>
 #include <smp.h>
 #include <KernelExport.h>
+#include <util/AutoLock.h>
 
 #include "arch_int_gicv2.h"
 #include "gicv2_regs.h"
@@ -16,6 +17,18 @@
 
 #define ICI_IRQ 0
 #define SHARED_IRQ_BASE 32
+
+
+static spinlock sGicv2DistributorLock = B_SPINLOCK_INITIALIZER;
+
+
+static inline void
+gicv2_write_barrier()
+{
+	// Complete normal-memory updates before making an interrupt visible to
+	// another CPU or device through the distributor.
+	asm volatile("dsb ishst" ::: "memory");
+}
 
 
 GICv2InterruptController::GICv2InterruptController(phys_addr_t gicd_addr, phys_addr_t gicc_addr)
@@ -39,18 +52,27 @@ GICv2InterruptController::GICv2InterruptController(phys_addr_t gicd_addr, phys_a
 		panic("not able to map the memory area for gicc\n");
 	}
 
+	// The ITLinesNumber field gives the number of 32-interrupt blocks minus
+	// one. Keep this controller within the architectural GICv2 limit.
+	fMaxIrq = (((fGicdRegs[GICD_REG_TYPER] & 0x1f) + 1) * 32);
+	if (fMaxIrq > 1020)
+		fMaxIrq = 1020;
+
 	// disable GICD
 	fGicdRegs[GICD_REG_CTLR] = 0;
 
 	// disable GICC
 	fGiccRegs[GICC_REG_CTLR] = 0;
 
-	// TODO: disable all interrupts
-	fGicdRegs[GICD_REG_ICENABLER] = 0xffffffff;
-	fGicdRegs[GICD_REG_ICENABLER+1] = 0xffffffff;
+	// Disable every interrupt implemented by this distributor. The old fixed
+	// two-register loop silently left SPIs enabled on larger GICs.
+	for (uint32 irq = 0; irq < fMaxIrq; irq += 32)
+		fGicdRegs[GICD_REG_ICENABLER + irq / 32] = 0xffffffff;
+	gicv2_write_barrier();
 
 	// enable GICD
 	fGicdRegs[GICD_REG_CTLR] = 0x03;
+	gicv2_write_barrier();
 
 	call_all_cpus_sync([](void *arg, int cpu) {
 		GICv2InterruptController* self = (GICv2InterruptController *)arg;
@@ -69,6 +91,7 @@ void GICv2InterruptController::_PerCpuInit()
 
 	// enable GICC
 	fGiccRegs[GICC_REG_CTLR] = 0x01;
+	gicv2_write_barrier();
 }
 
 
@@ -90,14 +113,20 @@ void GICv2InterruptController::EnableInterrupt(int32 irq)
 
 void GICv2InterruptController::_EnableInterrupt(int32 irq)
 {
+	if (irq < 0 || (uint32)irq >= fMaxIrq)
+		return;
+
 	uint32_t ena_reg = GICD_REG_ISENABLER + irq / 32;
 	uint32_t ena_val = 1 << (irq % 32);
-	fGicdRegs[ena_reg] = ena_val;
 
 	uint32_t prio_reg = GICD_REG_IPRIORITYR + irq / 4;
 	uint32_t prio_val = fGicdRegs[prio_reg];
-	prio_val |= 0x80 << (irq % 4 * 8);
+	uint32_t prio_shift = (irq % 4) * 8;
+	prio_val = (prio_val & ~(0xffu << prio_shift)) | (0x80u << prio_shift);
 	fGicdRegs[prio_reg] = prio_val;
+	gicv2_write_barrier();
+	fGicdRegs[ena_reg] = ena_val;
+	gicv2_write_barrier();
 }
 
 
@@ -118,7 +147,32 @@ void GICv2InterruptController::DisableInterrupt(int32 irq)
 
 void GICv2InterruptController::_DisableInterrupt(int32 irq)
 {
+	if (irq < 0 || (uint32)irq >= fMaxIrq)
+		return;
+
 	fGicdRegs[GICD_REG_ICENABLER + irq / 32] = 1 << (irq % 32);
+	gicv2_write_barrier();
+}
+
+
+status_t
+GICv2InterruptController::SetInterruptAffinity(int32 irq, int32 cpu)
+{
+	// SGIs and PPIs are private to each CPU and cannot be routed here.
+	if (irq < SHARED_IRQ_BASE || (uint32)irq >= fMaxIrq || cpu < 0
+		|| cpu >= smp_get_num_cpus() || cpu >= 8) {
+		return B_BAD_VALUE;
+	}
+
+	InterruptsSpinLocker locker(sGicv2DistributorLock);
+	uint32 targetRegister = GICD_REG_ITARGETSR + irq / 4;
+	uint32 targetShift = (irq % 4) * 8;
+	uint32 targets = fGicdRegs[targetRegister];
+	targets = (targets & ~(0xffu << targetShift)) | ((1u << cpu) << targetShift);
+	fGicdRegs[targetRegister] = targets;
+	gicv2_write_barrier();
+
+	return B_OK;
 }
 
 
@@ -140,11 +194,15 @@ void GICv2InterruptController::HandleInterrupt()
 
 void GICv2InterruptController::SendMulticastIci(CPUSet& cpuSet)
 {
+	gicv2_write_barrier();
 	fGicdRegs[GICD_REG_SGIR] = (cpuSet.Bits(0) << 16);
+	gicv2_write_barrier();
 }
 
 
 void GICv2InterruptController::SendBroadcastIci()
 {
+	gicv2_write_barrier();
 	fGicdRegs[GICD_REG_SGIR] = (0b01 << 24);
+	gicv2_write_barrier();
 }
