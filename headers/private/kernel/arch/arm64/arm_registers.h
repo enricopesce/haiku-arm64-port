@@ -602,6 +602,8 @@
 #define	PSR_FLAGS	0xf0000000
 
 /* TCR_EL1 - Translation Control Register */
+#define	TCR_HA			(1UL << 39)	/* Hardware Access flag update */
+#define	TCR_HD			(1UL << 40)	/* Hardware Dirty state update */
 #define	TCR_ASID_16	(1UL << 36)
 
 #define	TCR_IPS_SHIFT	32

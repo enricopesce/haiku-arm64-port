@@ -19,6 +19,8 @@ status_t
 arch_cpu_preboot_init_percpu(kernel_args *args, int curr_cpu)
 {
 	WRITE_SPECIALREG(VBAR_EL1, _exception_vectors);
+	// Make the new exception vector base visible before exceptions are enabled.
+	asm volatile("isb" ::: "memory");
 	return B_OK;
 }
 
@@ -31,10 +33,10 @@ arch_cpu_init_percpu(kernel_args *args, int curr_cpu)
 
 	uint64_t hafdbs = ID_AA64MMFR1_HAFDBS(mmfr1);
 	if (hafdbs == ID_AA64MMFR1_HAFDBS_AF) {
-		tcr |= (1UL << 39);
+		tcr |= TCR_HA;
 	}
 	if (hafdbs == ID_AA64MMFR1_HAFDBS_AF_DBS) {
-		tcr |= (1UL << 40) | (1UL << 39);
+		tcr |= TCR_HD | TCR_HA;
 	}
 
 	WRITE_SPECIALREG(TCR_EL1, tcr);

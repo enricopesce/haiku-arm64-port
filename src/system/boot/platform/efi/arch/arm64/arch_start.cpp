@@ -58,6 +58,9 @@ arm64_common_cpu_startup()
 		if (ID_AA64MMFR1_VH(id_aa64mmfr1_el1) == ID_AA64MMFR1_VH_IMPL) {
 			e2h = true;
 			WRITE_SPECIALREG(HCR_EL2, HCR_RW | HCR_TGE | HCR_E2H | HCR_AMO | HCR_IMO | HCR_FMO);
+			// HCR_EL2.E2H changes the effective EL1 system-register view at EL2.
+			// Complete that context change before configuring the EL1 host regime.
+			asm volatile("isb" ::: "memory");
 			WRITE_SPECIALREG(CPACR_EL1, CPACR_FPEN_TRAP_NONE);
 		}
 	}
