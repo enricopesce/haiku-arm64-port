@@ -182,6 +182,48 @@ CopyEngine::_CopyData(const BEntry& _source, const BEntry& _destination,
 	if (ret < B_OK)
 		return ret;
 
+#if defined(__aarch64__) || defined(__arm64__)
+	// The asynchronous reader/writer pipeline below has exposed data corruption
+	// when copying the system tree to a VirtIO-backed BFS volume on ARM64.
+	// Keep each read and its matching write in one thread until the storage path
+	// can provide the same ordering guarantees under concurrent I/O.
+	BFile destination(&_destination, B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+	ret = destination.InitCheck();
+	if (ret < B_OK)
+		return ret;
+
+	void* buffer = malloc(BUFFER_SIZE);
+	if (buffer == NULL)
+		return B_NO_MEMORY;
+
+	int32 loopIteration = 0;
+	while (true) {
+		ssize_t read = source.Read(buffer, BUFFER_SIZE);
+		if (read < B_OK) {
+			ret = (status_t)read;
+			fprintf(stderr, "Failed to read data: %s\n", strerror(ret));
+			break;
+		}
+		if (read == 0)
+			break;
+
+		ssize_t written = destination.Write(buffer, read);
+		if (written != read) {
+			ret = written < B_OK ? (status_t)written : B_IO_ERROR;
+			fprintf(stderr, "Failed to write data: %s\n", strerror(ret));
+			break;
+		}
+
+		fBytesRead += read;
+		fBytesWritten += written;
+		loopIteration++;
+		if (loopIteration % 2 == 0)
+			_UpdateProgress();
+	}
+
+	free(buffer);
+	return ret;
+#else
 	BFile* destination = new (nothrow) BFile(&_destination,
 		B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
 	ret = destination->InitCheck();
@@ -245,6 +287,7 @@ CopyEngine::_CopyData(const BEntry& _source, const BEntry& _destination,
 	}
 
 	return ret;
+#endif
 }
 
 
