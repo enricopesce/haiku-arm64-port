@@ -19,6 +19,7 @@ public:
 	void SendMulticastIci(CPUSet& cpuSet);
 	void SendBroadcastIci();
 private:
+	bool _IsLevelTriggered(uint32 irq) const;
 	void _PerCpuInit();
 	void _EnableInterrupt(int32 irq);
 	void _DisableInterrupt(int32 irq);

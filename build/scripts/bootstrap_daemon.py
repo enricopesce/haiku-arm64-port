@@ -3,10 +3,15 @@
 import socket
 import subprocess
 import sys
+import os
 
 
 address = '0.0.0.0'
 port = 4242
+
+# launch_daemon starts services with a minimal PATH.  Keep the standard Haiku
+# locations so /usr/bin/env python3 in HaikuPorter resolves inside the guest.
+os.environ['PATH'] = '/boot/home/config/non-packaged/bin:/boot/home/config/bin:/boot/system/non-packaged/bin:/boot/system/bin:/boot/system/apps'
 
 
 def receiveExactly(connection, size):

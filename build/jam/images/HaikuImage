@@ -25,6 +25,14 @@ AddPackageFilesToHaikuImage system packages :
 	nameFromMetaInfo
 	;
 
+# The bootstrap profile is intended to compile ports in the guest.  Unlike an
+# installer image, it needs Haiku's headers, static libraries and startup
+# objects active on the first boot.
+if $(HAIKU_BUILD_TYPE) = bootstrap {
+	AddPackageFilesToHaikuImage system packages : haiku_devel.hpkg
+		: nameFromMetaInfo ;
+}
+
 if $(HAIKU_BUILD_TYPE) = test {
 	AddPackageFilesToHaikuImage system packages : haiku_unittests.hpkg ;
 }

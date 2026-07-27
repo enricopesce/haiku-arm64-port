@@ -36,6 +36,7 @@ AddFilesToPackage add-ons kernel busses usb :
 	<usb>uhci
 	<usb>ohci
 	<usb>ehci
+	<usb>xhci
 	;
 AddFilesToPackage add-ons kernel busses virtio :
 	virtio_pci
@@ -93,6 +94,9 @@ AddNewDriversToPackage disk virtual :
 	ram_disk
 	remote_disk
 	virtio_block
+	;
+AddNewDriversToPackage graphics :
+	virtio_gpu
 	;
 AddNewDriversToPackage power :
 	acpi_battery@x86
@@ -323,6 +327,7 @@ AddBootModuleSymlinksToPackage
 	<usb>uhci
 	<usb>ohci
 	<usb>ehci
+	<usb>xhci
 	remote_disk
 	scsi_cd
 	scsi_disk

@@ -219,7 +219,9 @@ rule DefineDefaultBuildProfiles
 			AddHaikuImageSystemPackages
 				binutils
 				bison
+				curl
 				expat
+				findutils
 				flex
 				gcc
 				grep
@@ -234,11 +236,24 @@ rule DefineDefaultBuildProfiles
 				python3.10
 				sed
 				texinfo
+				# Bootstrap HTTPS client: packages declared as dependencies of an
+				# HPKG are not pulled into an image automatically. Keep the whole
+				# runtime chain active so HaikuPorter can use wget over TLS on first
+				# boot.
+				ca_root_certificates
+				git
+				openssl
+				wget
 				!gcc2 @{ gawk grep }@
 				gcc2 @{ grep_x86@secondary_x86 mawk }@
 				;
 
-			AddHaikuImageDisabledPackages
+			# A bootstrap image is a live development environment, not an
+			# installer medium. Activate the available development HPKGs so their
+			# headers and libraries are usable by HaikuPorter immediately.
+			AddHaikuImageSystemPackages
+				curl_devel
+				expat_devel
 				freetype_devel
 				libedit_devel
 				ncurses6_devel
@@ -260,7 +275,7 @@ rule DefineDefaultBuildProfiles
 						ncurses6
 						zlib
 						;
-					AddHaikuImageDisabledPackages
+					AddHaikuImageSystemPackages
 						freetype_devel
 						libedit_devel
 						ncurses6_devel

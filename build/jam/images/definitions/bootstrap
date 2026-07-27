@@ -3,10 +3,17 @@
 # import everything from the minimum image
 include [ FDirName $(HAIKU_BUILD_RULES_DIR) images definitions minimum ] ;
 
-# build and add the source package directory and a haikuports.config file
-CopyDirectoryToHaikuImage home haikuports
-	: [ BuildHaikuPortsSourcePackageDirectory ]
-	: input-source-packages : -x  *_source-*.hpkg : isTarget ;
+# Add the HaikuPorts configuration. Source packages are deliberately supplied
+# on the separate VirtIO CD: copying them into the root image triggers an
+# ARM64 kernel panic during early package processing.
+#
+# The port tree itself contains recipes and patches, not active HPKGs. Keeping
+# it on the writable boot volume lets the guest build missing and future ARM64
+# packages natively with HaikuPorter.
+CopyDirectoryToHaikuImage home
+	: $(HAIKU_PORTS)
+	: haikuports : -x .git -x work-* -x packages ;
+
 AddFilesToHaikuImage home haikuports
 	: [ BuildHaikuPortsRepositoryConfig /boot/home/haikuports ] ;
 

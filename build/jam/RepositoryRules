@@ -364,12 +364,12 @@ actions BootstrapRepositoryFetchPackage1
 
 	export $(HOST_ADD_BUILD_COMPATIBILITY_LIB_DIR)
 	if [ -n "$secondaryCrossDevelPackages" ]; then
-		$(HOST_HAIKU_PORTER) -j$(HAIKU_PORTER_CONCURRENT_JOBS) \
+		$(HAIKU_ABSOLUTE_TOP)/build/scripts/run_haikuporter_cross $(HOST_HAIKU_PORTER) -j$(HAIKU_PORTER_CONCURRENT_JOBS) \
 			--all-dependencies $(HAIKU_PORTER_EXTRA_OPTIONS) \
 			--cross-devel-package "$haikuCrossDevelPackage" \
 			"$secondaryCrossDevelPackages" $portSpec
 	else
-		$(HOST_HAIKU_PORTER) -j$(HAIKU_PORTER_CONCURRENT_JOBS) \
+		$(HAIKU_ABSOLUTE_TOP)/build/scripts/run_haikuporter_cross $(HOST_HAIKU_PORTER) -j$(HAIKU_PORTER_CONCURRENT_JOBS) \
 			--all-dependencies $(HAIKU_PORTER_EXTRA_OPTIONS) \
 			--cross-devel-package "$haikuCrossDevelPackage" $portSpec
 	fi
@@ -591,6 +591,10 @@ rule BuildHaikuPortsSourcePackageDirectory
 		$(PWD)
 		$(HAIKU_PACKAGE_REPOSITORIES_DIR_$(architecture))
 		HaikuPorts-sources-build ] ;
+	local crossPackagesDir = [ FDirName
+		$(PWD)
+		$(HAIKU_PACKAGE_REPOSITORIES_DIR_$(architecture))
+		HaikuPortsCross-build packages ] ;
 
 	local sourcePackageDir = <HaikuPorts-repository-source-packages>packages ;
 	MakeLocate $(sourcePackageDir) : $(outputDir) ;
@@ -622,6 +626,8 @@ rule BuildHaikuPortsSourcePackageDirectory
 		= haiku_cross_devel_sysroot_stage1_$(crossDevelPackageSuffixes).hpkg ;
 
 	HAIKU_REPOSITORY_BUILD_DIRECTORY on $(sourcePackageDir) = $(outputDir) ;
+	HAIKU_REPOSITORY_BUILD_CROSS_PACKAGES_DIRECTORY on $(sourcePackageDir)
+		= $(crossPackagesDir) ;
 
 	Depends $(sourcePackageDir) : $(packageList) $(haikuCrossDevelPackages)
 		$(configFile) ;
@@ -668,12 +674,14 @@ actions BuildHaikuPortsSourcePackageDirectory1
 
 	export $(HOST_ADD_BUILD_COMPATIBILITY_LIB_DIR)
 	if [ -n "$secondaryCrossDevelPackages" ]; then
-		$(HOST_HAIKU_PORTER) --cross-devel-package "$haikuCrossDevelPackage" \
+		$(HAIKU_ABSOLUTE_TOP)/build/scripts/run_haikuporter_cross $(HOST_HAIKU_PORTER) --cross-devel-package "$haikuCrossDevelPackage" \
 			"$secondaryCrossDevelPackages" \
+			--system-packages-directory "$(HAIKU_REPOSITORY_BUILD_CROSS_PACKAGES_DIRECTORY)" \
 			--all-dependencies $(HAIKU_PORTER_EXTRA_OPTIONS) \
 			--create-source-packages-for-bootstrap --portsfile $packageList
 	else
-		$(HOST_HAIKU_PORTER) --cross-devel-package "$haikuCrossDevelPackage" \
+		$(HAIKU_ABSOLUTE_TOP)/build/scripts/run_haikuporter_cross $(HOST_HAIKU_PORTER) --cross-devel-package "$haikuCrossDevelPackage" \
+			--system-packages-directory "$(HAIKU_REPOSITORY_BUILD_CROSS_PACKAGES_DIRECTORY)" \
 			--all-dependencies $(HAIKU_PORTER_EXTRA_OPTIONS) \
 			--create-source-packages-for-bootstrap --portsfile $packageList
 	fi
@@ -704,7 +712,7 @@ actions BuildHaikuPortsRepositoryConfig1
 	if [ "$(HAIKU_CONTINUOUS_INTEGRATION_BUILD)" = "1" ]; then
 		echo 'PACKAGER="Haiku buildmaster <buildmaster@haiku-os.org>"' > $(1)
 	else
-		echo '#PACKAGER="Joe Hacker <user@host.com>"' > $(1)
+		echo 'PACKAGER="Haiku ARM64 bootstrap <build-system@haiku-os.org>"' > $(1)
 	fi
 	cat >> $(1) << EOF
 TREE_PATH="$(HAIKU_REPOSITORY_TREE_PATH)"

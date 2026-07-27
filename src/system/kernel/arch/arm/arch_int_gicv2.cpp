@@ -176,16 +176,31 @@ GICv2InterruptController::SetInterruptAffinity(int32 irq, int32 cpu)
 }
 
 
+bool
+GICv2InterruptController::_IsLevelTriggered(uint32 irq) const
+{
+	// Each GICD_ICFGR word contains 16 two-bit fields. Bit[1] of a field is
+	// one for edge-triggered and zero for level-sensitive interrupts.
+	uint32 configuration = fGicdRegs[GICD_REG_ICFGR + irq / 16];
+	return (configuration & (2u << ((irq % 16) * 2))) == 0;
+}
+
+
 void GICv2InterruptController::HandleInterrupt()
 {
 	uint32_t iar = fGiccRegs[GICC_REG_IAR];
 	uint32_t irqnr = iar & 0x3FF;
-	if ((irqnr == 1022) || (irqnr == 1023)) {
+	if (irqnr >= GICV2_SPECIAL_INTERRUPT_BASE || irqnr >= fMaxIrq) {
 		dprintf("spurious interrupt\n");
-	} else if (irqnr == ICI_IRQ) {
+		// Special interrupt IDs are not acknowledged interrupts and must not
+		// be completed with an EOIR write.
+		return;
+	}
+
+	if (irqnr == ICI_IRQ) {
 		smp_intercpu_interrupt_handler(smp_get_current_cpu());
 	} else {
-		io_interrupt_handler(irqnr, true);
+		io_interrupt_handler(irqnr, _IsLevelTriggered(irqnr));
 	}
 
 	fGiccRegs[GICC_REG_EOIR] = iar;

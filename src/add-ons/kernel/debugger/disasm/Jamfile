@@ -2,9 +2,14 @@ SubDir HAIKU_TOP src add-ons kernel debugger disasm ;
 
 UsePrivateKernelHeaders ;
 
-KernelAddon <kdebug>disasm :
-	disasm.cpp
-	: disasm_arch.a
-	;
+# There is no ARM64 disassembler backend yet.  Keep the debugger buildable on
+# ARM64 without installing a non-functional disassembler add-on.
+if $(TARGET_ARCH) != arm64 {
+	KernelAddon <kdebug>disasm :
+		disasm.cpp
+		: disasm_arch.a
+		;
 
-SubInclude HAIKU_TOP src add-ons kernel debugger disasm $(TARGET_KERNEL_ARCH_DIR) ;
+	SubInclude HAIKU_TOP src add-ons kernel debugger disasm
+		$(TARGET_KERNEL_ARCH_DIR) ;
+}
