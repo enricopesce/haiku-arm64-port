@@ -255,9 +255,12 @@ write_guest_features(void* cookie, uint64 features)
 	virtio_pci_sim_info* bus = (virtio_pci_sim_info*)cookie;
 	if (bus->virtio1) {
 		volatile uint32 *select = (uint32*)(bus->commonCfgAddr
-			+ offsetof(struct virtio_pci_common_cfg, device_feature_select));
+			+ offsetof(struct virtio_pci_common_cfg, driver_feature_select));
 		volatile uint32 *feature = (uint32*)(bus->commonCfgAddr
-			+ offsetof(struct virtio_pci_common_cfg, device_feature));
+			+ offsetof(struct virtio_pci_common_cfg, driver_feature));
+		// The device_feature registers are read-only from the driver's point
+		// of view. Select and write the driver_feature registers so QEMU
+		// records the features before FEATURES_OK is set.
 		*select = 0;
 		*feature = features & 0xffffffff;
 		*select = 1;
