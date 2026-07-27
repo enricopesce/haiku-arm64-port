@@ -17,9 +17,17 @@ for bootstrapPackage
 	if $(packageArchitecture) != source {
 		local packageFileName
 			= [ on $(bootstrapPackage) return $(HAIKU_PACKAGE_FILE_NAME) ] ;
-		AddPackageFilesToHaikuImage system packages
-			: <cross-built>$(packageFileName)
-			: nameFromMetaInfo ;
+		# The base image already supplies these packages from the current
+		# Haiku build. Adding bootstrap copies would shadow that coherent
+		# system set and can change the desktop/service startup behavior.
+		local coreHaikuPackage
+			= [ Match "^haiku(_loader|_devel|_datatranslators)?-"
+				: $(packageFileName) ] ;
+		if ! $(coreHaikuPackage) {
+			AddPackageFilesToHaikuImage system packages
+				: <cross-built>$(packageFileName)
+				: nameFromMetaInfo ;
+		}
 	}
 }
 
