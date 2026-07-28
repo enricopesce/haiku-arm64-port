@@ -15,9 +15,15 @@ qemu=${QEMU_SYSTEM_AARCH64:-qemu-system-aarch64}
 firmware=${QEMU_AARCH64_FIRMWARE:-}
 seconds=${QEMU_SMOKE_SECONDS:-25}
 cpus=${QEMU_SMOKE_CPUS:-4}
+tcpdump=${TCPDUMP:-tcpdump}
 
 if [ -z "$firmware" ]; then
 	echo "QEMU_AARCH64_FIRMWARE must name the EDK2 AArch64 firmware" >&2
+	exit 2
+fi
+
+if ! command -v "$tcpdump" >/dev/null 2>&1; then
+	echo "TCPDUMP must name a tcpdump executable" >&2
 	exit 2
 fi
 
@@ -30,6 +36,7 @@ case "$cpus" in
 esac
 
 log=$(mktemp -t haiku-arm64-qemu-smoke.XXXXXX)
+capture=$(mktemp -t haiku-arm64-qemu-network.XXXXXX)
 pid=
 
 cleanup()
@@ -38,7 +45,7 @@ cleanup()
 		kill "$pid" 2>/dev/null || true
 		wait "$pid" 2>/dev/null || true
 	fi
-	rm -f "$log"
+	rm -f "$log" "$capture"
 }
 trap cleanup EXIT HUP INT TERM
 
@@ -47,7 +54,10 @@ trap cleanup EXIT HUP INT TERM
 	-bios "$firmware" \
 	-drive if=none,file="$image",format=raw,id=drive0 \
 	-device virtio-blk-pci,drive=drive0,disable-legacy=on,vectors=0 \
-	-device virtio-gpu-pci,disable-legacy=on,vectors=0 \
+	-device ramfb \
+	-netdev user,id=net0 \
+	-object "filter-dump,id=netdump,netdev=net0,file=$capture" \
+	-device virtio-net-pci,netdev=net0,disable-legacy=on,vectors=0 \
 	-display none -serial "file:$log" -monitor none -snapshot &
 pid=$!
 
@@ -67,5 +77,20 @@ for marker in \
 		exit 1
 	fi
 done
+
+dhcp=$("$tcpdump" -nn -vv -r "$capture" 'udp port 67 or udp port 68' 2>/dev/null)
+for state in Discover Offer Request ACK; do
+	if ! printf '%s\n' "$dhcp" | grep -F 'DHCP-Message' | grep -F ": $state" >/dev/null; then
+		echo "missing DHCP state: $state" >&2
+		printf '%s\n' "$dhcp" >&2
+		exit 1
+	fi
+done
+
+if ! printf '%s\n' "$dhcp" | grep -F 'Your-IP 10.0.2.15' >/dev/null; then
+	echo "missing QEMU DHCP lease for 10.0.2.15" >&2
+	printf '%s\n' "$dhcp" >&2
+	exit 1
+fi
 
 echo "ARM64 QEMU smoke test passed"
