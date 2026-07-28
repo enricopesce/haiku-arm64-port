@@ -20,9 +20,10 @@ for bootstrapPackage
 		# The base image already supplies these packages from the current
 		# Haiku build. Adding bootstrap copies would shadow that coherent
 		# system set and can change the desktop/service startup behavior.
+		local packageBaseName = $(packageFileName:G=) ;
 		local coreHaikuPackage
 			= [ Match "^haiku(_loader|_devel|_datatranslators)?-"
-				: $(packageFileName) ] ;
+				: $(packageBaseName) ] ;
 		if ! $(coreHaikuPackage) {
 			# Keep development packages out of /boot/system/packages: the
 			# minimum image remains the authoritative desktop and service base.
