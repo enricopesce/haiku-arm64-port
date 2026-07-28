@@ -16,8 +16,9 @@ if ! $(HAIKU_DEVELOPMENT_PACKAGES_DIR) {
 # an unavailable aclocal package.  Install only the native bootstrap closure
 # plus the architecture-independent tools used by it.
 local developmentPackageCandidates = [ Glob $(HAIKU_DEVELOPMENT_PACKAGES_DIR)
-	: *_bootstrap-*.hpkg haikuporter-*.hpkg ca_root_certificates-*.hpkg
-		noto-*.hpkg ] ;
+	: *_bootstrap-*.hpkg haikuporter-*.hpkg noto-*.hpkg ] ;
+local developmentCACertificatePackages = [ Glob
+	$(HAIKU_DEVELOPMENT_PACKAGES_DIR) : ca_root_certificates-*.hpkg ] ;
 local developmentPackages ;
 local developmentPackage ;
 for developmentPackage in $(developmentPackageCandidates) {
@@ -36,3 +37,12 @@ if ! $(developmentPackages) {
 
 AddPackageFilesToHaikuImage home config packages : $(developmentPackages)
 	: nameFromMetaInfo ;
+
+# OpenSSL and Git use the system trust-store path. A package installed in the
+# user layer would place the bundle under /boot/home/config instead, leaving
+# /boot/system/data/ssl/CARootCertificates.pem unavailable to TLS clients.
+if ! $(developmentCACertificatePackages) {
+	Exit "development image requires ca_root_certificates" ;
+}
+AddPackageFilesToHaikuImage system packages
+	: $(developmentCACertificatePackages) : nameFromMetaInfo ;
