@@ -20,6 +20,14 @@ switch $(HAIKU_BUILD_PROFILE) {
 		TARGET_DEFINES += HAIKU_MINIMUM_BUILD ;
 	}
 
+	case "development-*" : {
+		HAIKU_BUILD_TYPE = development ;
+		EnableBuildFeatures minimum_image ;
+
+		HAIKU_DEFINES += HAIKU_MINIMUM_BUILD ;
+		TARGET_DEFINES += HAIKU_MINIMUM_BUILD ;
+	}
+
 	case "test-*" : {
 		HAIKU_BUILD_TYPE = test ;
 		EnableBuildFeatures minimum_image ;

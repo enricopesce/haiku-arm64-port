@@ -11,7 +11,25 @@ if ! $(HAIKU_DEVELOPMENT_PACKAGES_DIR) {
 	Exit "development image requires HAIKU_DEVELOPMENT_PACKAGES_DIR" ;
 }
 
-local developmentPackages = [ Glob $(HAIKU_DEVELOPMENT_PACKAGES_DIR) : *.hpkg ] ;
+# Source packages and cross-generic helper packages are build inputs, not
+# runnable guest dependencies.  In particular, libtool_cross_generic requires
+# an unavailable aclocal package.  Install only the native bootstrap closure
+# plus the architecture-independent tools used by it.
+local developmentPackageCandidates = [ Glob $(HAIKU_DEVELOPMENT_PACKAGES_DIR)
+	: *_bootstrap-*.hpkg haikuporter-*.hpkg ca_root_certificates-*.hpkg
+		noto-*.hpkg ] ;
+local developmentPackages ;
+local developmentPackage ;
+for developmentPackage in $(developmentPackageCandidates) {
+	# Prefer the newer curl/git revisions. Noto is already supplied by the
+	# minimum image, so a second copy would make packagefs replace it.
+	local obsoletePackage = [ Match
+		"(curl_bootstrap(-devel)?-8.19.0-1-arm64|git_bootstrap-2.54.0-1-arm64|noto-20170202-7-any)\\.hpkg$"
+		: $(developmentPackage) ] ;
+	if ! $(obsoletePackage) {
+		developmentPackages += $(developmentPackage) ;
+	}
+}
 if ! $(developmentPackages) {
 	Exit "no development packages found in $(HAIKU_DEVELOPMENT_PACKAGES_DIR)" ;
 }
