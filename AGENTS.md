@@ -98,6 +98,10 @@ need to be rebuilt for each kernel edit.
 - `@minimum-mmc` is the supported interactive ARM64/QEMU desktop image. Use it
   for GUI, network, VirtIO and performance validation, and for published
   bootable artifacts.
+- `@development-mmc` is the supported desktop-with-toolchain image. It starts
+  from the minimal desktop and installs pre-built HPKGs only in
+  `/boot/home/config/packages`; invoke it with
+  `-sHAIKU_DEVELOPMENT_PACKAGES_DIR=/path/to/packages`.
 - `@bootstrap-mmc` is a native package-build environment only. HaikuPorter's
   bootstrap dependencies are activated in `/boot/system/packages` during first
   boot, so it must not be presented as equivalent to the minimal desktop.

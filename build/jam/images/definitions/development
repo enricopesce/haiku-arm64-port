@@ -1,0 +1,20 @@
+# This profile keeps the interactive image identical to the minimum desktop
+# and adds a pre-built native development toolchain as a user package layer.
+
+include [ FDirName $(HAIKU_BUILD_RULES_DIR) images definitions minimum ] ;
+
+# The package directory is intentionally supplied by the build invocation. It
+# is normally the HaikuPortsCross package output from the separate bootstrap
+# tree. Keeping it outside the bootstrap build type prevents its dependencies
+# from being selected as system packages.
+if ! $(HAIKU_DEVELOPMENT_PACKAGES_DIR) {
+	Exit "development image requires HAIKU_DEVELOPMENT_PACKAGES_DIR" ;
+}
+
+local developmentPackages = [ Glob $(HAIKU_DEVELOPMENT_PACKAGES_DIR) : *.hpkg ] ;
+if ! $(developmentPackages) {
+	Exit "no development packages found in $(HAIKU_DEVELOPMENT_PACKAGES_DIR)" ;
+}
+
+AddPackageFilesToHaikuImage home config packages : $(developmentPackages)
+	: nameFromMetaInfo ;
