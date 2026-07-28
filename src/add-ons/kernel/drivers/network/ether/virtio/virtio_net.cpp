@@ -46,6 +46,12 @@ struct virtio_net_tx_hdr {
 } _PACKED;
 
 
+static_assert(sizeof(virtio_net_hdr) == 10,
+	"legacy VirtIO network header size changed");
+static_assert(sizeof(virtio_net_hdr_v1) == 12,
+	"VirtIO 1 network header size changed");
+
+
 struct BufInfo : DoublyLinkedListLinkImpl<BufInfo> {
 	char*					buffer;
 	struct virtio_net_hdr*	hdr;
@@ -64,6 +70,7 @@ typedef struct {
 	virtio_device_interface*	virtio;
 
 	uint64 					features;
+	size_t					headerSize;
 
 	uint32					pairsCount;
 
@@ -72,7 +79,6 @@ typedef struct {
 
 	BufInfo**				rxBufInfos;
 	sem_id					rxDone;
-	sem_id					linkStateChangeSem;
 	area_id					rxArea;
 	BufInfoList				rxFullList;
 	mutex					rxLock;
@@ -208,7 +214,7 @@ virtio_net_rx_enqueue_buf(virtio_net_driver_info* info, BufInfo* buf)
 	entries[0] = buf->hdrEntry;
 	entries[1] = buf->entry;
 
-	memset(buf->hdr, 0, sizeof(struct virtio_net_hdr));
+	memset(buf->hdr, 0, info->headerSize);
 
 	// queue the rx buffer
 	status_t status = info->virtio->queue_request_v(info->rxQueues[0],
@@ -301,6 +307,12 @@ virtio_net_init_device(void* _info, void** _cookie)
 			/* | VIRTIO_NET_F_MQ */,
 		&info->features, &get_feature_name);
 
+	// VirtIO 1 devices always use the 12-byte virtio_net_hdr_v1 layout.
+	// Advertising a 10-byte legacy header makes the device consume the first
+	// two bytes of the Ethernet frame as header data, corrupting every packet.
+	info->headerSize = (info->features & VIRTIO_FEATURE_VERSION_1) != 0
+		? sizeof(virtio_net_hdr_v1) : sizeof(virtio_net_hdr);
+
 	if ((info->features & VIRTIO_NET_F_MQ) != 0
 			&& (info->features & VIRTIO_NET_F_CTRL_VQ) != 0
 			&& info->virtio->read_device_config(info->virtio_device,
@@ -386,7 +398,7 @@ virtio_net_init_device(void* _info, void** _cookie)
 		if (status != B_OK)
 			goto err4;
 
-		status = get_memory_map(buf->hdr, sizeof(struct virtio_net_hdr),
+		status = get_memory_map(buf->hdr, info->headerSize,
 			&buf->hdrEntry, 1);
 		if (status != B_OK)
 			goto err4;
@@ -420,7 +432,7 @@ virtio_net_init_device(void* _info, void** _cookie)
 		if (status != B_OK)
 			goto err6;
 
-		status = get_memory_map(buf->hdr, sizeof(struct virtio_net_hdr),
+		status = get_memory_map(buf->hdr, info->headerSize,
 			&buf->hdrEntry, 1);
 		if (status != B_OK)
 			goto err6;
@@ -438,28 +450,28 @@ virtio_net_init_device(void* _info, void** _cookie)
 	info->txDone = create_sem(1, "virtio_net_tx");
 	if (info->rxDone < B_OK || info->txDone < B_OK) {
 		status = B_NO_MEMORY;
-		goto err6;
+		goto err7;
 	}
 
 	// Setup interrupt
 	status = info->virtio->setup_interrupt(info->virtio_device, NULL, info);
 	if (status != B_OK) {
 		ERROR("interrupt setup failed (%s)\n", strerror(status));
-		goto err6;
+		goto err7;
 	}
 
 	status = info->virtio->queue_setup_interrupt(info->rxQueues[0],
 		virtio_net_rxDone, info);
 	if (status != B_OK) {
 		ERROR("queue interrupt setup failed (%s)\n", strerror(status));
-		goto err6;
+		goto err8;
 	}
 
 	status = info->virtio->queue_setup_interrupt(info->txQueues[0],
 		virtio_net_txDone, info);
 	if (status != B_OK) {
 		ERROR("queue interrupt setup failed (%s)\n", strerror(status));
-		goto err6;
+		goto err8;
 	}
 
 	if ((info->features & VIRTIO_NET_F_CTRL_VQ) != 0) {
@@ -467,18 +479,24 @@ virtio_net_init_device(void* _info, void** _cookie)
 			NULL, info);
 		if (status != B_OK) {
 			ERROR("queue interrupt setup failed (%s)\n", strerror(status));
-			goto err6;
+			goto err8;
 		}
 	}
 
 	*_cookie = info;
 	return B_OK;
 
-err6:
+err8:
+	info->virtio->free_interrupts(info->virtio_device);
+err7:
 	if (info->rxDone >= B_OK)
 		delete_sem(info->rxDone);
 	if (info->txDone >= B_OK)
 		delete_sem(info->txDone);
+	info->rxDone = info->txDone = -1;
+	mutex_destroy(&info->rxLock);
+	mutex_destroy(&info->txLock);
+err6:
 	for (int i = 0; i < info->txSizes[0]; i++)
 		delete info->txBufInfos[i];
 err5:
@@ -650,8 +668,8 @@ virtio_net_receive(void* cookie, net_buffer** _buffer)
 				break;
 			}
 
-			if (usedLength > sizeof(virtio_net_hdr))
-				buf->rxUsedLength = usedLength - sizeof(virtio_net_hdr);
+			if (usedLength > info->headerSize)
+				buf->rxUsedLength = usedLength - info->headerSize;
 			else
 				buf->rxUsedLength = 0;
 			info->rxFullList.Add(buf);
@@ -765,11 +783,11 @@ virtio_net_send(void* cookie, net_buffer* buffer)
 		mutex_unlock(&info->txLock);
 		return B_BAD_DATA;
 	}
-	memset(buf->hdr, 0, sizeof(virtio_net_hdr));
+	memset(buf->hdr, 0, info->headerSize);
 
 	physical_entry entries[2];
 	entries[0] = buf->hdrEntry;
-	entries[0].size = sizeof(virtio_net_hdr);
+	entries[0].size = info->headerSize;
 	entries[1] = buf->entry;
 	entries[1].size = size;
 
@@ -813,19 +831,6 @@ virtio_net_ioctl(void* cookie, uint32 op, void* buffer, size_t length)
 
 			return user_memcpy(buffer, &info->maxframesize,
 				sizeof(info->maxframesize));
-
-		case ETHER_SET_LINK_STATE_SEM:
-		{
-			// This is part of the Ethernet driver contract. net_server uses the
-			// semaphore to synchronize link-state monitoring before DHCP starts.
-			sem_id sem;
-			if (length != sizeof(sem))
-				return B_BAD_VALUE;
-			if (user_memcpy(&sem, buffer, sizeof(sem)) != B_OK)
-				return B_BAD_ADDRESS;
-			info->linkStateChangeSem = sem;
-			return B_OK;
-		}
 
 		case ETHER_SETPROMISC:
 		{
@@ -1012,9 +1017,6 @@ virtio_net_init_driver(device_node* node, void** cookie)
 
 	info->node = node;
 	info->rxDone = info->txDone = -1;
-	// net_server installs this semaphore before it starts auto-configuration.
-	// Keep an explicit invalid value until ETHER_SET_LINK_STATE_SEM succeeds.
-	info->linkStateChangeSem = -1;
 
 	*cookie = info;
 	return B_OK;
