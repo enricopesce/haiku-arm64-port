@@ -24,7 +24,9 @@ for bootstrapPackage
 			= [ Match "^haiku(_loader|_devel|_datatranslators)?-"
 				: $(packageFileName) ] ;
 		if ! $(coreHaikuPackage) {
-			AddPackageFilesToHaikuImage system packages
+			# Keep development packages out of /boot/system/packages: the
+			# minimum image remains the authoritative desktop and service base.
+			AddPackageFilesToHaikuImage home config packages
 				: <cross-built>$(packageFileName)
 				: nameFromMetaInfo ;
 		}
