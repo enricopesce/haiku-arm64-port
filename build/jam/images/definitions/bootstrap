@@ -3,15 +3,20 @@
 # import everything from the minimum image
 include [ FDirName $(HAIKU_BUILD_RULES_DIR) images definitions minimum ] ;
 
-# A bootstrap image is a self-contained native ARM64 development environment.
-# Add every locally built HaikuPortsCross package explicitly.  Resolving only
-# package-family names through AddHaikuImageSystemPackages is insufficient here:
-# bootstrap package names are normalized (e.g. git_bootstrap -> git), which can
-# leave a successfully built HPKG out of the image.
-local bootstrapRepository = <repository>HaikuPortsCross ;
-local bootstrapPackage ;
-for bootstrapPackage
-		in [ on $(bootstrapRepository) return $(HAIKU_REPOSITORY_PACKAGES) ] {
+# Keep the desktop/service base identical to @minimum by default.  The
+# cross-built toolchain is optional: activating dozens of packages during the
+# first boot changes packagefs startup ordering and has exposed incomplete
+# service modules on ARM64.
+HAIKU_BOOTSTRAP_DEVELOPMENT_PACKAGES ?= 0 ;
+
+if $(HAIKU_BOOTSTRAP_DEVELOPMENT_PACKAGES) = 1 {
+	# Add every locally built HaikuPortsCross package explicitly. Resolving only
+	# package-family names through AddHaikuImageSystemPackages is insufficient
+	# here because bootstrap package names are normalized (git_bootstrap -> git).
+	local bootstrapRepository = <repository>HaikuPortsCross ;
+	local bootstrapPackage ;
+	for bootstrapPackage
+			in [ on $(bootstrapRepository) return $(HAIKU_REPOSITORY_PACKAGES) ] {
 	local packageArchitecture
 		= [ on $(bootstrapPackage) return $(HAIKU_PACKAGE_ARCHITECTURE) ] ;
 	if $(packageArchitecture) != source {
@@ -32,6 +37,7 @@ for bootstrapPackage
 				: nameFromMetaInfo ;
 		}
 	}
+}
 }
 
 # Add the HaikuPorts configuration. Source packages are deliberately supplied
