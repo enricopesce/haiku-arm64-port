@@ -93,6 +93,23 @@ The bootstrap is intentionally separate from the normal QEMU image. It creates
 the ARM64 development/bootstrap environment and source packages; it does not
 need to be rebuilt for each kernel edit.
 
+### Image roles
+
+- `@minimum-mmc` is the supported interactive ARM64/QEMU desktop image. Use it
+  for GUI, network, VirtIO and performance validation, and for published
+  bootable artifacts.
+- `@bootstrap-mmc` is a native package-build environment only. HaikuPorter's
+  bootstrap dependencies are activated in `/boot/system/packages` during first
+  boot, so it must not be presented as equivalent to the minimal desktop.
+- Keep optional development HPKGs in `/boot/home/config/packages` when testing
+  them on a desktop image. Do not fold the HaikuPortsCross repository into the
+  system package set of a user-facing image.
+
+Before publishing, boot the exact MMC file with the regular QEMU command and
+verify serial output contains no `indirect_desc` error and publishes
+`net/virtio/0`. The known absence of the ARM64 media-server package is not a
+VirtIO or packagefs boot failure.
+
 ```sh
 cd /Volumes/HaikuCase/haiku/generated.arm64-bootstrap
 PATH=/Volumes/HaikuCase/bin:/opt/homebrew/opt/ncurses/bin:/opt/homebrew/opt/m4/bin:/opt/homebrew/bin:$PATH \
