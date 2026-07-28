@@ -72,6 +72,7 @@ typedef struct {
 
 	BufInfo**				rxBufInfos;
 	sem_id					rxDone;
+	sem_id					linkStateChangeSem;
 	area_id					rxArea;
 	BufInfoList				rxFullList;
 	mutex					rxLock;
@@ -430,6 +431,16 @@ virtio_net_init_device(void* _info, void** _cookie)
 	mutex_init(&info->rxLock, "virtionet rx lock");
 	mutex_init(&info->txLock, "virtionet tx lock");
 
+	// Queue callbacks belong to the device lifetime, not to an individual
+	// devfs open. Keeping these semaphores alive across close()/open() avoids
+	// racing an in-flight VirtIO completion with close().
+	info->rxDone = create_sem(0, "virtio_net_rx");
+	info->txDone = create_sem(1, "virtio_net_tx");
+	if (info->rxDone < B_OK || info->txDone < B_OK) {
+		status = B_NO_MEMORY;
+		goto err6;
+	}
+
 	// Setup interrupt
 	status = info->virtio->setup_interrupt(info->virtio_device, NULL, info);
 	if (status != B_OK) {
@@ -464,6 +475,10 @@ virtio_net_init_device(void* _info, void** _cookie)
 	return B_OK;
 
 err6:
+	if (info->rxDone >= B_OK)
+		delete_sem(info->rxDone);
+	if (info->txDone >= B_OK)
+		delete_sem(info->txDone);
 	for (int i = 0; i < info->txSizes[0]; i++)
 		delete info->txBufInfos[i];
 err5:
@@ -492,6 +507,11 @@ virtio_net_uninit_device(void* _cookie)
 	virtio_net_driver_info* info = (virtio_net_driver_info*)_cookie;
 
 	info->virtio->free_interrupts(info->virtio_device);
+	if (info->rxDone >= B_OK)
+		delete_sem(info->rxDone);
+	if (info->txDone >= B_OK)
+		delete_sem(info->txDone);
+	info->rxDone = info->txDone = -1;
 
 	mutex_destroy(&info->rxLock);
 	mutex_destroy(&info->txLock);
@@ -534,10 +554,6 @@ virtio_net_open(void* _info, const char* path, int openMode, void** _cookie)
 
 	info->nonblocking = (openMode & O_NONBLOCK) != 0;
 	info->maxframesize = MAX_FRAME_SIZE;
-	info->rxDone = create_sem(0, "virtio_net_rx");
-	info->txDone = create_sem(1, "virtio_net_tx");
-	if (info->rxDone < B_OK || info->txDone < B_OK)
-		goto error;
 	handle->info = info;
 
 	if ((info->features & VIRTIO_NET_F_MAC) != 0) {
@@ -566,27 +582,14 @@ virtio_net_open(void* _info, const char* path, int openMode, void** _cookie)
 
 	*_cookie = handle;
 	return B_OK;
-
-error:
-	delete_sem(info->rxDone);
-	delete_sem(info->txDone);
-	info->rxDone = info->txDone = -1;
-	free(handle);
-	return B_ERROR;
 }
 
 
 static status_t
 virtio_net_close(void* cookie)
 {
-	virtio_net_handle* handle = (virtio_net_handle*)cookie;
 	CALLED();
-
-	virtio_net_driver_info* info = handle->info;
-	delete_sem(info->rxDone);
-	delete_sem(info->txDone);
-	info->rxDone = info->txDone = -1;
-
+	(void)cookie;
 	return B_OK;
 }
 
@@ -811,6 +814,19 @@ virtio_net_ioctl(void* cookie, uint32 op, void* buffer, size_t length)
 			return user_memcpy(buffer, &info->maxframesize,
 				sizeof(info->maxframesize));
 
+		case ETHER_SET_LINK_STATE_SEM:
+		{
+			// This is part of the Ethernet driver contract. net_server uses the
+			// semaphore to synchronize link-state monitoring before DHCP starts.
+			sem_id sem;
+			if (length != sizeof(sem))
+				return B_BAD_VALUE;
+			if (user_memcpy(&sem, buffer, sizeof(sem)) != B_OK)
+				return B_BAD_ADDRESS;
+			info->linkStateChangeSem = sem;
+			return B_OK;
+		}
+
 		case ETHER_SETPROMISC:
 		{
 			TRACE("ioctl: set promisc\n");
@@ -995,6 +1011,10 @@ virtio_net_init_driver(device_node* node, void** cookie)
 	memset((void*)info, 0, sizeof(*info));
 
 	info->node = node;
+	info->rxDone = info->txDone = -1;
+	// net_server installs this semaphore before it starts auto-configuration.
+	// Keep an explicit invalid value until ETHER_SET_LINK_STATE_SEM succeeds.
+	info->linkStateChangeSem = -1;
 
 	*cookie = info;
 	return B_OK;
