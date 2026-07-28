@@ -15,11 +15,13 @@ BootstrapPackageRepository HaikuPortsCross
 	bash_bootstrap-5.3-1
 	binutils_bootstrap-2.41_2026_03_10-1
 	bison_bootstrap-3.8.2-1
+	bzip2_bootstrap-1.0.8-1
 	coreutils_bootstrap-9.9-1
 	dos2unix_bootstrap-7.5.1-1
-	git_bootstrap-2.54.0-1
-	curl_bootstrap-8.19.0-1
-	curl_bootstrap_devel-8.19.0-1
+	git_bootstrap-2.54.0-2
+	gzip_bootstrap-1.14-1
+	curl_bootstrap-8.19.0-2
+	curl_bootstrap_devel-8.19.0-2
 	expat_bootstrap-2.5.0-1
 	expat_bootstrap_devel-2.5.0-1
 	findutils_bootstrap-4.9.0-1
@@ -32,6 +34,7 @@ BootstrapPackageRepository HaikuPortsCross
 	icu74_bootstrap_devel-74.1-1
 	less_bootstrap-668-1
 	lzip_bootstrap-1.23-1
+	libiconv_bootstrap-1.18-1
 	libffi_bootstrap-3.4.6-1
 	libffi_bootstrap_devel-3.4.6-1
 	m4_bootstrap-1.4.19-1
@@ -42,10 +45,14 @@ BootstrapPackageRepository HaikuPortsCross
 	patch_bootstrap-2.7.6-1
 	sed_bootstrap-4.9-1
 	texinfo_bootstrap-7.2-1
+	tar_bootstrap-1.35-1
+	unzip_bootstrap-6.0-1
+	xz_utils_bootstrap-5.8.3-1
 	zlib_bootstrap-1.2.13-1
 	zlib_bootstrap_devel-1.2.13-1
 	openssl_bootstrap-3.5.7-1
 	openssl_bootstrap_devel-3.5.7-1
+	openssh_bootstrap-10.4p1-1
 	wget_bootstrap-1.24.5-1
 	:
 	# repository architecture packages (stage 2)
@@ -54,9 +61,11 @@ BootstrapPackageRepository HaikuPortsCross
 	bash_bootstrap
 	binutils_bootstrap
 	bison_bootstrap
+	bzip2_bootstrap
 	coreutils_bootstrap
 	dos2unix_bootstrap
 	git_bootstrap
+	gzip_bootstrap
 	curl_bootstrap
 	expat_bootstrap
 	findutils_bootstrap
@@ -67,6 +76,7 @@ BootstrapPackageRepository HaikuPortsCross
 	grep_bootstrap
 	less_bootstrap
 	lzip_bootstrap
+	libiconv_bootstrap
 	libffi_bootstrap
 	m4_bootstrap
 	make_bootstrap
@@ -75,7 +85,11 @@ BootstrapPackageRepository HaikuPortsCross
 	patch_bootstrap
 	sed_bootstrap
 	texinfo_bootstrap
+	tar_bootstrap
+	unzip_bootstrap
+	xz_utils_bootstrap
 	openssl_bootstrap
+	openssh_bootstrap
 	wget_bootstrap
 	zlib_bootstrap
 	:
