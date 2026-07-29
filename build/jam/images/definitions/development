@@ -9,9 +9,25 @@ if ! $(HAIKU_DEVELOPMENT_NON_PACKAGED_DIR) {
 }
 
 # The directory is produced from the HaikuPortsCross closure with
-# build/scripts/prepare_bootstrap_development_tree.  The home non-packaged
-# path is already in the default user PATH, while keeping /boot/system/packages
-# and /boot/home/config/packages identical to the minimum image guarantees
-# unchanged packagefs activation and desktop service startup.
-CopyDirectoryToHaikuImage home config non-packaged
-	: $(HAIKU_DEVELOPMENT_NON_PACKAGED_DIR) ;
+# build/scripts/prepare_bootstrap_development_tree. Copy every top-level
+# directory into the existing user non-packaged tree: CopyDirectory's default
+# behaviour would otherwise add the staging directory as an extra path level
+# and leave the commands outside PATH.
+local developmentDirectories =
+	bin
+	data
+	develop
+	documentation
+	include
+	lib
+	man
+	settings
+	share
+	var
+	;
+local developmentDirectory ;
+for developmentDirectory in $(developmentDirectories) {
+	CopyDirectoryToHaikuImage home config non-packaged
+		: [ FDirName $(HAIKU_DEVELOPMENT_NON_PACKAGED_DIR)
+			$(developmentDirectory) ] : $(developmentDirectory) ;
+}
