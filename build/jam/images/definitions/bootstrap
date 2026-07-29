@@ -40,6 +40,15 @@ if $(HAIKU_BOOTSTRAP_DEVELOPMENT_PACKAGES) = 1 {
 }
 }
 
+# curl_bootstrap_devel is part of the ARM64 bootstrap closure and links
+# against OpenSSL.  The cross repository exposes its development package as a
+# subpackage, so include it explicitly alongside the selected base packages.
+# Otherwise packagefs deactivates curl_bootstrap_devel at first boot because
+# devel:libcrypto and devel:libssl are unavailable.
+AddPackageFilesToHaikuImage home config packages
+	: <cross-built>openssl_bootstrap_devel-3.5.7-1-arm64.hpkg
+	: nameFromMetaInfo ;
+
 # Add the HaikuPorts configuration. Source packages are deliberately supplied
 # on the separate VirtIO CD: copying them into the root image triggers an
 # ARM64 kernel panic during early package processing.
