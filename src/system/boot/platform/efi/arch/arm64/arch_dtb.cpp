@@ -93,7 +93,8 @@ get_fdt_reg(const void* fdt, int node, size_t index, addr_range& range)
 
 	size_t entryCells = addressCells + sizeCells;
 	size_t entrySize = entryCells * sizeof(uint32);
-	if (index == SIZE_MAX || index > SIZE_MAX / entrySize
+	if ((size_t)length % entrySize != 0 || index == SIZE_MAX
+		|| index > SIZE_MAX / entrySize
 		|| (index + 1) * entrySize > (size_t)length) {
 		return false;
 	}
