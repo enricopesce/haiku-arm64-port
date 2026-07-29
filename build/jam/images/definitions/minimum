@@ -232,6 +232,11 @@ SYSTEM_SERVERS = [ FFilterByBuildFeatures
 	input_server
 	keystore_server
 	launch_daemon
+	# The launch roster starts the Media Kit on a normal desktop session. Keep
+	# both executables in the minimum profile so it does not repeatedly fail to
+	# launch media_server on ARM64/QEMU.
+	media_addon_server
+	media_server
 	mount_server
 	net_server
 	notification_server

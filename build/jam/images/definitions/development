@@ -1,48 +1,17 @@
-# This profile keeps the interactive image identical to the minimum desktop
-# and adds a pre-built native development toolchain as a user package layer.
+# This profile keeps the interactive image package-compatible with the minimum
+# desktop and provides the prepared native development environment without an
+# additional packagefs layer.
 
 include [ FDirName $(HAIKU_BUILD_RULES_DIR) images definitions minimum ] ;
 
-# The package directory is intentionally supplied by the build invocation. It
-# is normally the HaikuPortsCross package output from the separate bootstrap
-# tree. Keeping it outside the bootstrap build type prevents its dependencies
-# from being selected as system packages.
-if ! $(HAIKU_DEVELOPMENT_PACKAGES_DIR) {
-	Exit "development image requires HAIKU_DEVELOPMENT_PACKAGES_DIR" ;
+if ! $(HAIKU_DEVELOPMENT_NON_PACKAGED_DIR) {
+	Exit "development image requires HAIKU_DEVELOPMENT_NON_PACKAGED_DIR" ;
 }
 
-# Source packages and cross-generic helper packages are build inputs, not
-# runnable guest dependencies.  In particular, libtool_cross_generic requires
-# an unavailable aclocal package.  Install only the native bootstrap closure
-# plus the architecture-independent tools used by it.
-local developmentPackageCandidates = [ Glob $(HAIKU_DEVELOPMENT_PACKAGES_DIR)
-	: *_bootstrap-*.hpkg haikuporter-*.hpkg noto-*.hpkg ] ;
-local developmentCACertificatePackages = [ Glob
-	$(HAIKU_DEVELOPMENT_PACKAGES_DIR) : ca_root_certificates-*.hpkg ] ;
-local developmentPackages ;
-local developmentPackage ;
-for developmentPackage in $(developmentPackageCandidates) {
-	# Prefer the newer curl/git revisions. Noto is already supplied by the
-	# minimum image, so a second copy would make packagefs replace it.
-	local obsoletePackage = [ Match
-		"(curl_bootstrap(-devel)?-8.19.0-1-arm64|git_bootstrap-2.54.0-1-arm64|noto-20170202-7-any)\\.hpkg$"
-		: $(developmentPackage) ] ;
-	if ! $(obsoletePackage) {
-		developmentPackages += $(developmentPackage) ;
-	}
-}
-if ! $(developmentPackages) {
-	Exit "no development packages found in $(HAIKU_DEVELOPMENT_PACKAGES_DIR)" ;
-}
-
-AddPackageFilesToHaikuImage home config packages : $(developmentPackages)
-	: nameFromMetaInfo ;
-
-# OpenSSL and Git use the system trust-store path. A package installed in the
-# user layer would place the bundle under /boot/home/config instead, leaving
-# /boot/system/data/ssl/CARootCertificates.pem unavailable to TLS clients.
-if ! $(developmentCACertificatePackages) {
-	Exit "development image requires ca_root_certificates" ;
-}
-AddPackageFilesToHaikuImage system packages
-	: $(developmentCACertificatePackages) : nameFromMetaInfo ;
+# The directory is produced from the HaikuPortsCross closure with
+# build/scripts/prepare_bootstrap_development_tree.  The home non-packaged
+# path is already in the default user PATH, while keeping /boot/system/packages
+# and /boot/home/config/packages identical to the minimum image guarantees
+# unchanged packagefs activation and desktop service startup.
+CopyDirectoryToHaikuImage home config non-packaged
+	: $(HAIKU_DEVELOPMENT_NON_PACKAGED_DIR) ;
