@@ -20,7 +20,7 @@ static bigtime_t sTimerMaxInterval;
 #define TIMER_IMASK (2)
 #define TIMER_ISTATUS (4)
 
-#define TIMER_IRQ 27
+#define DEFAULT_TIMER_IRQ 27
 
 
 void
@@ -53,10 +53,17 @@ int
 arch_init_timer(kernel_args *args)
 {
 	sTimerTicksUS = READ_SPECIALREG(CNTFRQ_EL0) / 1000000;
+	if (sTimerTicksUS == 0)
+		panic("ARM64 architectural timer frequency is invalid");
 	sTimerMaxInterval = INT32_MAX / sTimerTicksUS;
 
 	WRITE_SPECIALREG(CNTV_CTL_EL0, TIMER_DISABLED);
-	install_io_interrupt_handler(TIMER_IRQ, &arch_timer_interrupt, NULL, 0);
+	uint32 timerIrq = args->arch_args.timer_irq;
+	if (timerIrq == 0)
+		timerIrq = DEFAULT_TIMER_IRQ;
+	dprintf("ARM64 virtual timer: irq=%lu, frequency=%lu Hz\n", (uint64)timerIrq,
+		READ_SPECIALREG(CNTFRQ_EL0));
+	install_io_interrupt_handler(timerIrq, &arch_timer_interrupt, NULL, 0);
 
 	return B_OK;
 }

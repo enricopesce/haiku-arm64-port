@@ -16,6 +16,10 @@ firmware=${QEMU_AARCH64_FIRMWARE:-}
 seconds=${QEMU_SMOKE_SECONDS:-25}
 cpus=${QEMU_SMOKE_CPUS:-4}
 tcpdump=${TCPDUMP:-tcpdump}
+artifacts=${QEMU_SMOKE_ARTIFACT_DIR:-}
+gic_version=${QEMU_SMOKE_GIC_VERSION:-2}
+acpi=${QEMU_SMOKE_ACPI:-off}
+virtio_vectors=${QEMU_SMOKE_VIRTIO_VECTORS:-0}
 
 if [ -z "$firmware" ]; then
 	echo "QEMU_AARCH64_FIRMWARE must name the EDK2 AArch64 firmware" >&2
@@ -35,6 +39,22 @@ case "$cpus" in
 		;;
 esac
 
+case "$gic_version" in
+	2|3) ;;
+	*)
+		echo "QEMU_SMOKE_GIC_VERSION must be 2 or 3" >&2
+		exit 2
+		;;
+esac
+
+case "$acpi" in
+	on|off) ;;
+	*)
+		echo "QEMU_SMOKE_ACPI must be on or off" >&2
+		exit 2
+		;;
+esac
+
 log=$(mktemp -t haiku-arm64-qemu-smoke.XXXXXX)
 capture=$(mktemp -t haiku-arm64-qemu-network.XXXXXX)
 pid=
@@ -45,19 +65,34 @@ cleanup()
 		kill "$pid" 2>/dev/null || true
 		wait "$pid" 2>/dev/null || true
 	fi
+	if [ -n "$artifacts" ]; then
+		mkdir -p "$artifacts"
+		cp "$log" "$artifacts/serial.log"
+		cp "$capture" "$artifacts/network.pcap"
+		{
+			printf 'host: '; uname -a
+			if command -v sw_vers >/dev/null 2>&1; then
+				sw_vers
+			fi
+			printf 'qemu: '; "$qemu" --version | head -1
+			printf 'firmware sha256: '; shasum -a 256 "$firmware"
+			printf 'image sha256: '; shasum -a 256 "$image"
+			printf 'command: %s\n' "$qemu -machine virt,accel=hvf,acpi=$acpi,gic-version=$gic_version ..."
+		} > "$artifacts/environment.txt"
+	fi
 	rm -f "$log" "$capture"
 }
 trap cleanup EXIT HUP INT TERM
 
 "$qemu" \
-	-machine virt,accel=hvf,acpi=off,gic-version=2 -cpu host -smp "$cpus" -m 2048 \
+	-machine "virt,accel=hvf,acpi=$acpi,gic-version=$gic_version" -cpu host -smp "$cpus" -m 2048 \
 	-bios "$firmware" \
 	-drive if=none,file="$image",format=raw,id=drive0 \
-	-device virtio-blk-pci,drive=drive0,disable-legacy=on,vectors=0 \
+	-device virtio-blk-pci,drive=drive0,disable-legacy=on,vectors="$virtio_vectors" \
 	-device ramfb \
 	-netdev user,id=net0 \
 	-object "filter-dump,id=netdump,netdev=net0,file=$capture" \
-	-device virtio-net-pci,netdev=net0,disable-legacy=on,vectors=0 \
+	-device virtio-net-pci,netdev=net0,disable-legacy=on,vectors="$virtio_vectors" \
 	-display none -serial "file:$log" -monitor none -snapshot &
 pid=$!
 
@@ -67,7 +102,8 @@ wait "$pid" 2>/dev/null || true
 pid=
 
 for marker in \
-	'kind: gicv2' \
+	"kind: gicv$gic_version" \
+	'EFI GOP framebuffer:' \
 	"scheduler_init: found $cpus logical cpu" \
 	'Mounted boot partition: /dev/disk/virtual/virtio_block/0/1' \
 	'Volume::InitialVerify(): volume at "/boot/system" is consistent'; do

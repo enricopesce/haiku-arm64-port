@@ -13,6 +13,8 @@
 #define ACPI_MCFG_SIGNATURE		"MCFG"
 #define ACPI_SPCR_SIGNATURE		"SPCR"
 #define ACPI_DBG2_SIGNATURE		"DBG2"
+#define ACPI_GTDT_SIGNATURE		"GTDT"
+#define ACPI_IORT_SIGNATURE		"IORT"
 
 #define ACPI_LOCAL_APIC_ENABLED	0x01
 
@@ -241,6 +243,40 @@ typedef struct acpi_gic_distributor {
 	uint8 gic_version;
 	uint8 reserved[3];
 } _PACKED acpi_gic_distributor;
+
+typedef struct acpi_gic_redistributor {
+	uint8 type;
+	uint8 length;
+	uint16 reserved;
+	uint64 base_address;
+	uint32 range_length;
+} _PACKED acpi_gic_redistributor;
+
+typedef struct acpi_gic_its {
+	uint8 type;
+	uint8 length;
+	uint16 reserved;
+	uint32 its_id;
+	uint64 base_address;
+	uint32 reserved2;
+} _PACKED acpi_gic_its;
+
+// ACPI 5.1 Generic Timer Description Table. ARM64 uses the virtual timer
+// when firmware makes it available to non-secure EL1.
+typedef struct acpi_gtdt {
+	acpi_descriptor_header header;
+	uint64 counter_block_address;
+	uint32 reserved;
+	uint32 secure_el1_interrupt;
+	uint32 secure_el1_flags;
+	uint32 nonsecure_el1_interrupt;
+	uint32 nonsecure_el1_flags;
+	uint32 virtual_timer_interrupt;
+	uint32 virtual_timer_flags;
+	uint32 nonsecure_el2_interrupt;
+	uint32 nonsecure_el2_flags;
+	uint64 counter_read_block_address;
+} _PACKED acpi_gtdt;
 
 typedef struct acpi_gas {
 	uint8 address_space_id;

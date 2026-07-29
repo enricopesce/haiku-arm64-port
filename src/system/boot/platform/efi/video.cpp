@@ -49,6 +49,14 @@ static bool sModeChosen;
 static bool sSettingsLoaded;
 
 
+static void
+disable_framebuffer(const char* reason)
+{
+	dprintf("EFI GOP framebuffer disabled: %s\n", reason);
+	gKernelArgs.frame_buffer.enabled = false;
+}
+
+
 static int
 compare_video_modes(video_mode *a, video_mode *b)
 {
@@ -182,6 +190,35 @@ depth_from_mode_info(efi_graphics_output_mode_information* info)
 }
 
 
+static bool
+validate_framebuffer_mode(efi_graphics_output_mode_information* info,
+	uint64 framebufferBase, uint64 framebufferSize, uint32* _depth,
+	uint32* _bytesPerRow)
+{
+	if (info == NULL || info->HorizontalResolution == 0
+		|| info->VerticalResolution == 0
+		|| info->PixelsPerScanLine < info->HorizontalResolution) {
+		return false;
+	}
+
+	int depth = depth_from_mode_info(info);
+	if (depth <= 0 || framebufferBase == 0)
+		return false;
+
+	uint64 bytesPerPixel = (depth + 7) / 8;
+	uint64 bytesPerRow = (uint64)info->PixelsPerScanLine * bytesPerPixel;
+	if (bytesPerRow > ~(uint32)0
+		|| info->VerticalResolution > ~(uint64)0 / bytesPerRow
+		|| framebufferSize < bytesPerRow * info->VerticalResolution) {
+		return false;
+	}
+
+	*_depth = depth;
+	*_bytesPerRow = bytesPerRow;
+	return true;
+}
+
+
 extern "C" status_t
 platform_init_video(void)
 {
@@ -198,8 +235,7 @@ platform_init_video(void)
 	efi_status status = kBootServices->LocateProtocol(&sGraphicsOutputGuid, NULL,
 		(void **)&sGraphicsOutput);
 	if (sGraphicsOutput == NULL || status != EFI_SUCCESS) {
-		dprintf("GOP protocol not found\n");
-		gKernelArgs.frame_buffer.enabled = false;
+		disable_framebuffer("GOP protocol not found");
 		sGraphicsOutput = NULL;
 		return B_ERROR;
 	}
@@ -248,7 +284,7 @@ platform_init_video(void)
 
 	if (bestArea == 0 || bestDepth == 0) {
 		sGraphicsOutput = NULL;
-		gKernelArgs.frame_buffer.enabled = false;
+		disable_framebuffer("no supported GOP pixel format");
 		return B_ERROR;
 	}
 
@@ -279,17 +315,33 @@ platform_switch_to_logo(void)
 	if (!sModeChosen)
 		get_mode_from_settings();
 
-	sGraphicsOutput->SetMode(sGraphicsOutput, sGraphicsMode);
+	if (sGraphicsOutput->SetMode(sGraphicsOutput, sGraphicsMode) != EFI_SUCCESS) {
+		disable_framebuffer("SetMode failed");
+		return;
+	}
+
+	uint32 depth;
+	uint32 bytesPerRow;
+	if (!validate_framebuffer_mode(sGraphicsOutput->Mode->Info,
+		sGraphicsOutput->Mode->FrameBufferBase,
+		sGraphicsOutput->Mode->FrameBufferSize, &depth, &bytesPerRow)) {
+		disable_framebuffer("invalid GOP geometry or framebuffer range");
+		return;
+	}
+
 	gKernelArgs.frame_buffer.physical_buffer.start =
 		sGraphicsOutput->Mode->FrameBufferBase;
 	gKernelArgs.frame_buffer.physical_buffer.size =
 		sGraphicsOutput->Mode->FrameBufferSize;
 	gKernelArgs.frame_buffer.width = sGraphicsOutput->Mode->Info->HorizontalResolution;
 	gKernelArgs.frame_buffer.height = sGraphicsOutput->Mode->Info->VerticalResolution;
-	int depth = depth_from_mode_info(sGraphicsOutput->Mode->Info);
 	gKernelArgs.frame_buffer.depth = depth;
-	gKernelArgs.frame_buffer.bytes_per_row = sGraphicsOutput->Mode->Info->PixelsPerScanLine
-			* ((depth + 7) / 8);
+	gKernelArgs.frame_buffer.bytes_per_row = bytesPerRow;
+	dprintf("EFI GOP framebuffer: %lux%lu %lu-bit stride %lu size %lu\n",
+		(uint64)gKernelArgs.frame_buffer.width,
+		(uint64)gKernelArgs.frame_buffer.height,
+		(uint64)depth, (uint64)bytesPerRow,
+		(uint64)gKernelArgs.frame_buffer.physical_buffer.size);
 
 	video_display_splash(gKernelArgs.frame_buffer.physical_buffer.start);
 }

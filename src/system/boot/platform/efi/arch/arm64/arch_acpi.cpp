@@ -4,6 +4,7 @@
  */
 
 #include "string.h"
+#include <stddef.h>
 
 #include <boot/platform.h>
 #include <boot/stage2.h>
@@ -85,39 +86,89 @@ arch_handle_acpi()
 
 	acpi_madt *madt = (acpi_madt*)acpi_find_table(ACPI_MADT_SIGNATURE);
 	if (madt != NULL) {
-		uint64 gicc_base = 0;
-		uint64 gicd_base = 0;
-		uint8 version = 0;
+		if (madt->header.length < sizeof(acpi_madt)) {
+			dprintf("ignoring malformed ACPI MADT\n");
+		} else {
+			uint64 gicc_base = 0;
+			uint64 gicd_base = 0;
+			uint64 gicr_base = 0;
+			uint32 gicr_size = 0;
+			uint8 version = 0;
 
-		acpi_apic *desc = (acpi_apic*)(madt + 1);
-		while (desc != (acpi_apic*)((char*)madt + madt->header.length)) {
-			if (desc->type == ACPI_MADT_GIC_INTERFACE) {
-				acpi_gic_interface *acpi_gicc = (acpi_gic_interface*)desc;
-				if (acpi_gicc->cpu_interface_num == 0)
-					gicc_base = acpi_gicc->base_address;
+			acpi_apic *desc = (acpi_apic*)(madt + 1);
+			uint8* end = (uint8*)madt + madt->header.length;
+			while ((uint8*)desc + sizeof(acpi_apic) <= end) {
+				if (desc->length < sizeof(acpi_apic)
+					|| (uint8*)desc + desc->length > end) {
+					dprintf("ignoring malformed ACPI MADT entry\n");
+					break;
+				}
+				if (desc->type == ACPI_MADT_GIC_INTERFACE) {
+					if (desc->length >= sizeof(acpi_gic_interface)) {
+						acpi_gic_interface *acpi_gicc = (acpi_gic_interface*)desc;
+						if (acpi_gicc->cpu_interface_num == 0)
+							gicc_base = acpi_gicc->base_address;
 
-				platform_cpu_info* cpu = NULL;
-				arch_smp_register_cpu(&cpu);
-				if (cpu == NULL)
-					continue;
-				cpu->id = acpi_gicc->cpu_interface_num;
-				cpu->mpidr = acpi_gicc->mpidr;
-			} else if (desc->type == ACPI_MADT_GIC_DISTRIBUTOR) {
-				acpi_gic_distributor *acpi_gicd = (acpi_gic_distributor*)desc;
-				gicd_base = acpi_gicd->base_address;
-				version = acpi_gicd->gic_version;
+						platform_cpu_info* cpu = NULL;
+						arch_smp_register_cpu(&cpu);
+						if (cpu != NULL) {
+							cpu->id = acpi_gicc->cpu_interface_num;
+							cpu->mpidr = acpi_gicc->mpidr;
+						}
+					}
+				} else if (desc->type == ACPI_MADT_GIC_DISTRIBUTOR) {
+					if (desc->length >= sizeof(acpi_gic_distributor)) {
+						acpi_gic_distributor *acpi_gicd = (acpi_gic_distributor*)desc;
+						gicd_base = acpi_gicd->base_address;
+						version = acpi_gicd->gic_version;
+					}
+				} else if (desc->type == ACPI_MADT_GIC_REDISTRIBUTOR) {
+					if (desc->length >= sizeof(acpi_gic_redistributor)) {
+						acpi_gic_redistributor* gicr = (acpi_gic_redistributor*)desc;
+						gicr_base = gicr->base_address;
+						gicr_size = gicr->range_length;
+					}
+				}
+				desc = (acpi_apic*)((uint8*)desc + desc->length);
 			}
-			desc = (acpi_apic*)((char*)desc + desc->length);
-		}
 
-		if (version == 2 && gicc_base != 0 && gicd_base != 0) {
-			intc_info &intc = gKernelArgs.arch_args.interrupt_controller;
-			strcpy(intc.kind, INTC_KIND_GICV2);
-			intc.regs1.start = gicd_base;
-			intc.regs2.start = gicc_base;
+			if (version == 2 && gicc_base != 0 && gicd_base != 0) {
+				intc_info &intc = gKernelArgs.arch_args.interrupt_controller;
+				strcpy(intc.kind, INTC_KIND_GICV2);
+				intc.regs1.start = gicd_base;
+				intc.regs2.start = gicc_base;
 
-			dprintf("discovered gic from acpi: version=%d, gicd=%lx, gicc=%lx\n",
-				version, gicd_base, gicc_base);
+				dprintf("discovered gic from acpi: version=%d, gicd=%lx, gicc=%lx\n",
+					version, gicd_base, gicc_base);
+			} else if (version == 3 && gicd_base != 0 && gicr_base != 0
+				&& gicr_size != 0) {
+				intc_info &intc = gKernelArgs.arch_args.interrupt_controller;
+				strcpy(intc.kind, INTC_KIND_GICV3);
+				intc.regs1.start = gicd_base;
+				intc.regs2.start = gicr_base;
+				intc.regs2.size = gicr_size;
+
+				dprintf("discovered GICv3 from ACPI: gicd=%lx, gicr=%lx (%lu bytes)\n",
+					gicd_base, gicr_base, (uint64)gicr_size);
+			}
 		}
+	}
+
+	acpi_gtdt* gtdt = (acpi_gtdt*)acpi_find_table(ACPI_GTDT_SIGNATURE);
+	if (gtdt != NULL) {
+		size_t requiredLength = offsetof(acpi_gtdt, virtual_timer_flags)
+			+ sizeof(gtdt->virtual_timer_flags);
+		if (gtdt->header.length >= requiredLength
+			&& gtdt->virtual_timer_interrupt != 0) {
+			gKernelArgs.arch_args.timer_irq = gtdt->virtual_timer_interrupt;
+			dprintf("discovered virtual timer from ACPI GTDT: irq=%lu\n",
+				(uint64)gKernelArgs.arch_args.timer_irq);
+		} else {
+			dprintf("ignoring malformed ACPI GTDT\n");
+		}
+	}
+
+	if (acpi_find_table(ACPI_IORT_SIGNATURE) != NULL) {
+		dprintf("ACPI IORT present: ARM64 SMMU translation is not initialized\n");
 	}
 }

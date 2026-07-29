@@ -34,6 +34,7 @@ typedef struct {
 
 	uart_info	uart;
 	intc_info	interrupt_controller;
+	uint32		timer_irq;
 
 } _PACKED arch_kernel_args;
 

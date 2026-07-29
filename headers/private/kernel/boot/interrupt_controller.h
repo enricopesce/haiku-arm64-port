@@ -12,6 +12,7 @@
 
 #define		INTC_KIND_GICV1		"gicv1"
 #define		INTC_KIND_GICV2		"gicv2"
+#define		INTC_KIND_GICV3		"gicv3"
 #define		INTC_KIND_OMAP3		"omap3"
 #define		INTC_KIND_PXA		"pxa"
 #define		INTC_KIND_SUN4I		"sun4i"

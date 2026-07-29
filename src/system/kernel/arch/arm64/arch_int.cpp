@@ -25,6 +25,7 @@
 
 #include "soc.h"
 #include "arch_int_gicv2.h"
+#include "arch_int_gicv3.h"
 
 #define TRACE_ARCH_INT
 #ifdef TRACE_ARCH_INT
@@ -99,6 +100,11 @@ arch_int_init_post_vm(kernel_args *args)
 		ic = new(std::nothrow) GICv2InterruptController(
 			args->arch_args.interrupt_controller.regs1.start,
 			args->arch_args.interrupt_controller.regs2.start);
+	} else if (strcmp(args->arch_args.interrupt_controller.kind, INTC_KIND_GICV3) == 0) {
+		ic = new(std::nothrow) GICv3InterruptController(
+			args->arch_args.interrupt_controller.regs1.start,
+			args->arch_args.interrupt_controller.regs2.start,
+			args->arch_args.interrupt_controller.regs2.size);
 	}
 
 	if (ic == NULL)
