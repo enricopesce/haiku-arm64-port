@@ -45,7 +45,7 @@ if $(HAIKU_BOOTSTRAP_DEVELOPMENT_PACKAGES) = 1 {
 # subpackage, so include it explicitly alongside the selected base packages.
 # Otherwise packagefs deactivates curl_bootstrap_devel at first boot because
 # devel:libcrypto and devel:libssl are unavailable.
-AddPackageFilesToHaikuImage home config packages
+AddPackageFilesToHaikuImage system packages
 	: <cross-built>openssl_bootstrap_devel-3.5.7-1-arm64.hpkg
 	: nameFromMetaInfo ;
 
