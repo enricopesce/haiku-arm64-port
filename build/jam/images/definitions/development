@@ -1,33 +1,13 @@
-# This profile keeps the interactive image package-compatible with the minimum
-# desktop and provides the prepared native development environment without an
-# additional packagefs layer.
+# This profile is a clean minimum desktop with a non-active local package
+# payload. Packages are copied to /boot/home/Packages and are installed by the
+# user through pkgman after boot; packagefs sees only the minimum image until
+# then.
 
 include [ FDirName $(HAIKU_BUILD_RULES_DIR) images definitions minimum ] ;
 
-if ! $(HAIKU_DEVELOPMENT_NON_PACKAGED_DIR) {
-	Exit "development image requires HAIKU_DEVELOPMENT_NON_PACKAGED_DIR" ;
+if ! $(HAIKU_DEVELOPMENT_PACKAGE_PAYLOAD_DIR) {
+	Exit "development image requires HAIKU_DEVELOPMENT_PACKAGE_PAYLOAD_DIR" ;
 }
 
-# The directory is produced from the HaikuPortsCross closure with
-# build/scripts/prepare_bootstrap_development_tree. Copy every top-level
-# directory into the existing user non-packaged tree: CopyDirectory's default
-# behaviour would otherwise add the staging directory as an extra path level
-# and leave the commands outside PATH.
-local developmentDirectories =
-	bin
-	data
-	develop
-	documentation
-	include
-	lib
-	man
-	settings
-	share
-	var
-	;
-local developmentDirectory ;
-for developmentDirectory in $(developmentDirectories) {
-	CopyDirectoryToHaikuImage home config non-packaged
-		: [ FDirName $(HAIKU_DEVELOPMENT_NON_PACKAGED_DIR)
-			$(developmentDirectory) ] : $(developmentDirectory) ;
-}
+CopyDirectoryToHaikuImage home
+	: $(HAIKU_DEVELOPMENT_PACKAGE_PAYLOAD_DIR) : Packages ;
