@@ -7,6 +7,8 @@
 #include <atomic>
 #include <sys/types.h>
 
+// Keep this implementation target-neutral: the ARM64 build baseline is
+// Armv8-A, so its generated atomics must remain valid without LSE.
 
 extern "C" [[gnu::optimize("omit-frame-pointer")]] void
 atomic_set(int32_t* ptr, int32_t value)
@@ -120,4 +122,3 @@ atomic_get64(int64_t* ptr)
 	auto& obj = *reinterpret_cast<std::atomic<int64_t>*>(ptr);
 	return obj.load(std::memory_order_acquire);
 }
-
