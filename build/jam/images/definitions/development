@@ -11,3 +11,14 @@ if ! $(HAIKU_DEVELOPMENT_PACKAGE_PAYLOAD_DIR) {
 
 CopyDirectoryToHaikuImage home
 	: $(HAIKU_DEVELOPMENT_PACKAGE_PAYLOAD_DIR) : Packages ;
+
+# TLS clients use /boot/system/data/ssl/CARootCertificates.pem. Keep the
+# certificate bundle active in the system package layer even though all other
+# bootstrap HPKGs are deliberately staged for manual installation.
+local caCertificatePackage = [ Glob $(HAIKU_DEVELOPMENT_PACKAGE_PAYLOAD_DIR)
+	: ca_root_certificates-*.hpkg ] ;
+if ! $(caCertificatePackage) {
+	Exit "development image requires ca_root_certificates in its package payload" ;
+}
+AddPackageFilesToHaikuImage system packages : $(caCertificatePackage)
+	: nameFromMetaInfo ;
