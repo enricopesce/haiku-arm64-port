@@ -1,0 +1,12 @@
+SubDir HAIKU_TOP src tests system boot arm64_fdt ;
+
+SubDirHdrs $(HAIKU_TOP) src system boot platform efi arch arm64 ;
+
+BuildPlatformMain <build>arm64_fdt_parser_test :
+	arm64_fdt_parser_test.cpp
+	arm64_fdt_parser.cpp
+	: $(HOST_LIBSTDC++)
+	;
+
+SEARCH on [ FGristFiles arm64_fdt_parser.cpp ]
+	= [ FDirName $(HAIKU_TOP) src system boot platform efi arch arm64 ] ;

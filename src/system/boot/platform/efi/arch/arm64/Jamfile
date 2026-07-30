@@ -28,6 +28,7 @@ for platform in [ MultiBootSubDirSetup efi ] {
 			arch_acpi.cpp
 			arch_cache.cpp
 			arch_dtb.cpp
+			arm64_fdt_parser.cpp
 			arch_mmu.cpp
 			arch_smp.cpp
 			arch_start.cpp
