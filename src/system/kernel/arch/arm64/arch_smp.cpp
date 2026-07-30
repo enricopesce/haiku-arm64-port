@@ -23,6 +23,9 @@ arch_smp_init(kernel_args *args)
 status_t
 arch_smp_per_cpu_init(kernel_args *args, int32 cpu)
 {
+	InterruptController* controller = InterruptController::Get();
+	if (controller != NULL)
+		controller->InitPerCpu();
 	return B_OK;
 }
 

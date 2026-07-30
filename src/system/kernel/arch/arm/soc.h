@@ -18,6 +18,9 @@ public:
 	{
 		return B_UNSUPPORTED;
 	}
+	virtual void InitPerCpu()
+	{
+	}
 
 	virtual void HandleInterrupt() = 0;
 
