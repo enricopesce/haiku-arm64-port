@@ -3,63 +3,10 @@
 # import everything from the minimum image
 include [ FDirName $(HAIKU_BUILD_RULES_DIR) images definitions minimum ] ;
 
-# Keep the desktop/service base identical to @minimum by default.  The
-# cross-built toolchain is optional: activating dozens of packages during the
-# first boot changes packagefs startup ordering and has exposed incomplete
-# service modules on ARM64.
-HAIKU_BOOTSTRAP_DEVELOPMENT_PACKAGES ?= 0 ;
-
-if $(HAIKU_BOOTSTRAP_DEVELOPMENT_PACKAGES) = 1 {
-	# Add every locally built HaikuPortsCross package explicitly. Resolving only
-	# package-family names through AddHaikuImageSystemPackages is insufficient
-	# here because bootstrap package names are normalized (git_bootstrap -> git).
-	local bootstrapRepository = <repository>HaikuPortsCross ;
-	local bootstrapPackage ;
-	for bootstrapPackage
-			in [ on $(bootstrapRepository) return $(HAIKU_REPOSITORY_PACKAGES) ] {
-	local packageArchitecture
-		= [ on $(bootstrapPackage) return $(HAIKU_PACKAGE_ARCHITECTURE) ] ;
-	if $(packageArchitecture) != source {
-		local packageFileName
-			= [ on $(bootstrapPackage) return $(HAIKU_PACKAGE_FILE_NAME) ] ;
-		# The base image already supplies these packages from the current
-		# Haiku build. Adding bootstrap copies would shadow that coherent
-		# system set and can change the desktop/service startup behavior.
-		local packageBaseName = $(packageFileName:G=) ;
-		local coreHaikuPackage
-			= [ Match "^haiku(_loader|_devel|_datatranslators)?-"
-				: $(packageBaseName) ] ;
-		if ! $(coreHaikuPackage) {
-			# Keep development packages out of /boot/system/packages: the
-			# minimum image remains the authoritative desktop and service base.
-			AddPackageFilesToHaikuImage home config packages
-				: <cross-built>$(packageFileName)
-				: nameFromMetaInfo ;
-		}
-	}
-}
-}
-
-# curl_bootstrap_devel is part of the ARM64 bootstrap closure and links
-# against OpenSSL.  The cross repository exposes its development package as a
-# subpackage, so include it explicitly alongside the selected base packages.
-# Otherwise packagefs deactivates curl_bootstrap_devel at first boot because
-# devel:libcrypto and devel:libssl are unavailable.
-AddPackageFilesToHaikuImage system packages
-	: <cross-built>openssl_bootstrap_devel-3.5.7-1-arm64.hpkg
-	: nameFromMetaInfo ;
-
-# Add the HaikuPorts configuration. Source packages are deliberately supplied
-# on the separate VirtIO CD: copying them into the root image triggers an
-# ARM64 kernel panic during early package processing.
-#
-# The port tree itself contains recipes and patches, not active HPKGs. Keeping
-# it on the writable boot volume lets the guest build missing and future ARM64
-# packages natively with HaikuPorter.
-CopyDirectoryToHaikuImage home
-	: $(HAIKU_PORTS)
-	: haikuports : -x .git -x work-* -x packages ;
-
+# build and add the source package directory and a haikuports.config file
+CopyDirectoryToHaikuImage home haikuports
+	: [ BuildHaikuPortsSourcePackageDirectory ]
+	: input-source-packages : -x  *_source-*.hpkg : isTarget ;
 AddFilesToHaikuImage home haikuports
 	: [ BuildHaikuPortsRepositoryConfig /boot/home/haikuports ] ;
 
@@ -67,3 +14,8 @@ AddFilesToHaikuImage home haikuports
 local formatVersionsFile = <haikuports>FormatVersions ;
 SEARCH on $(formatVersionsFile) = $(HAIKU_PORTS) ;
 AddFilesToHaikuImage home haikuports : $(formatVersionsFile) ;
+
+# bootstrap daemon
+local bootstrapDaemon = <haiku-image>bootstrap_daemon.py ;
+SEARCH on $(bootstrapDaemon) = [ FDirName $(HAIKU_TOP) build scripts ] ;
+AddFilesToHaikuImage home config settings boot launch : $(bootstrapDaemon) ;

@@ -20,14 +20,6 @@ switch $(HAIKU_BUILD_PROFILE) {
 		TARGET_DEFINES += HAIKU_MINIMUM_BUILD ;
 	}
 
-	case "development-*" : {
-		HAIKU_BUILD_TYPE = development ;
-		EnableBuildFeatures minimum_image ;
-
-		HAIKU_DEFINES += HAIKU_MINIMUM_BUILD ;
-		TARGET_DEFINES += HAIKU_MINIMUM_BUILD ;
-	}
-
 	case "test-*" : {
 		HAIKU_BUILD_TYPE = test ;
 		EnableBuildFeatures minimum_image ;
@@ -67,7 +59,6 @@ rule DefineDefaultBuildProfiles
 	# bootstrap profiles
 	DefineBuildProfile bootstrap-raw : image : "haiku-bootstrap.image" ;
 	DefineBuildProfile bootstrap-mmc : haiku-mmc-image : "haiku-bootstrap.mmc" ;
-	DefineBuildProfile development-mmc : haiku-mmc-image : "haiku-development.mmc" ;
 	DefineBuildProfile bootstrap-vmware : vmware-image
 		: "haiku-bootstrap.vmdk" ;
 	DefineBuildProfile bootstrap-anyboot : anyboot-image
@@ -228,41 +219,24 @@ rule DefineDefaultBuildProfiles
 			AddHaikuImageSystemPackages
 				binutils
 				bison
-				curl
 				expat
-				findutils
 				flex
 				gcc
 				grep
 				haikuporter
 				less
 				libedit
-				libffi
 				make
-				m4
 				ncurses6
 				noto
-				python3.10
+				python
 				sed
 				texinfo
-				# Bootstrap HTTPS client: packages declared as dependencies of an
-				# HPKG are not pulled into an image automatically. Keep the whole
-				# runtime chain active so HaikuPorter can use wget over TLS on first
-				# boot.
-				ca_root_certificates
-				git
-				openssl
-				wget
 				!gcc2 @{ gawk grep }@
 				gcc2 @{ grep_x86@secondary_x86 mawk }@
 				;
 
-			# A bootstrap image is a live development environment, not an
-			# installer medium. Activate the available development HPKGs so their
-			# headers and libraries are usable by HaikuPorter immediately.
-			AddHaikuImageSystemPackages
-				curl_devel
-				expat_devel
+			AddHaikuImageDisabledPackages
 				freetype_devel
 				libedit_devel
 				ncurses6_devel
@@ -284,7 +258,7 @@ rule DefineDefaultBuildProfiles
 						ncurses6
 						zlib
 						;
-					AddHaikuImageSystemPackages
+					AddHaikuImageDisabledPackages
 						freetype_devel
 						libedit_devel
 						ncurses6_devel

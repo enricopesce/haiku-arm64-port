@@ -182,9 +182,7 @@ SYSTEM_PREFERENCES = [ FFilterByBuildFeatures
 	VirtualMemory
 ] ;
 
-SYSTEM_DEMOS = [ FFilterByBuildFeatures
-	GLTeapot@mesa
-] ;
+SYSTEM_DEMOS = ;
 
 
 rule HaikuImageGetSystemLibs
@@ -201,12 +199,9 @@ rule HaikuImageGetSystemLibs
 			libdebug.so
 			libdebugger.so@primary
 			libdevice.so
-			libgame.so
 			libgnu.so
-			libmedia.so
 			libnetwork.so
 			libpackage.so
-			libscreensaver.so
 			libtextencoding.so
 			libtracker.so
 			libtranslation.so
@@ -232,11 +227,6 @@ SYSTEM_SERVERS = [ FFilterByBuildFeatures
 	input_server
 	keystore_server
 	launch_daemon
-	# The launch roster starts the Media Kit on a normal desktop session. Keep
-	# both executables in the minimum profile so it does not repeatedly fail to
-	# launch media_server on ARM64/QEMU.
-	media_addon_server
-	media_server
 	mount_server
 	net_server
 	notification_server
@@ -272,9 +262,6 @@ SYSTEM_NETWORK_PROTOCOLS =
 ;
 
 SYSTEM_ADD_ONS_ACCELERANTS = [ FFilterByBuildFeatures
-	arm64 @{
-		virtio_gpu.accelerant
-	}@ # arm64
 	x86,x86_64 @{
 		vesa.accelerant
 	}@ # x86,x86_64

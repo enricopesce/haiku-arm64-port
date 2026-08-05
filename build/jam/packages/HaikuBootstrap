@@ -6,10 +6,7 @@ HaikuPackage $(haikuPackage) ;
 
 
 # modules
-AddFilesToPackage add-ons kernel bus_managers :
-	$(SYSTEM_ADD_ONS_BUS_MANAGERS)
-	fdt@riscv64,arm,arm64
-	;
+AddFilesToPackage add-ons kernel bus_managers : $(SYSTEM_ADD_ONS_BUS_MANAGERS) ;
 AddFilesToPackage add-ons kernel busses agp_gart :
 	<agp_gart>intel@x86,x86_64
 	;
@@ -36,7 +33,6 @@ AddFilesToPackage add-ons kernel busses usb :
 	<usb>uhci
 	<usb>ohci
 	<usb>ehci
-	<usb>xhci
 	;
 AddFilesToPackage add-ons kernel busses virtio :
 	virtio_pci
@@ -93,10 +89,7 @@ AddNewDriversToPackage disk scsi :
 AddNewDriversToPackage disk virtual :
 	ram_disk
 	remote_disk
-	virtio_block
-	;
-AddNewDriversToPackage graphics :
-	virtio_gpu
+	virtio_block@arm,arm64,riscv64
 	;
 AddNewDriversToPackage power :
 	acpi_battery@x86
@@ -306,7 +299,6 @@ AddBootModuleSymlinksToPackage
 	acpi@x86,x86_64
 	ata
 	pci
-	fdt@riscv64,arm,arm64
 	<pci>designware@riscv64
 	<pci>ecam@riscv64,arm,arm64
 	<pci>x86@x86,x86_64
@@ -327,13 +319,12 @@ AddBootModuleSymlinksToPackage
 	<usb>uhci
 	<usb>ohci
 	<usb>ehci
-	<usb>xhci
 	remote_disk
 	scsi_cd
 	scsi_disk
 	virtio
 	virtio_pci
-	virtio_block
+	virtio_block@arm,arm64,riscv64
 	virtio_scsi
 	hyperv@x86,x86_64
 	hyperv_scsi@x86,x86_64

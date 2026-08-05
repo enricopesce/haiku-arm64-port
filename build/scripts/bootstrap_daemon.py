@@ -1,21 +1,16 @@
-#!/usr/bin/env python3.10
+#!/usr/bin/env python
 
 import socket
 import subprocess
 import sys
-import os
 
 
 address = '0.0.0.0'
 port = 4242
 
-# launch_daemon starts services with a minimal PATH.  Keep the standard Haiku
-# locations so /usr/bin/env python3 in HaikuPorter resolves inside the guest.
-os.environ['PATH'] = '/boot/home/config/non-packaged/bin:/boot/home/config/bin:/boot/system/non-packaged/bin:/boot/system/bin:/boot/system/apps'
-
 
 def receiveExactly(connection, size):
-	data = b''
+	data = '';
 	while size > 0:
 		dataReceived = connection.recv(size)
 		if not dataReceived:
@@ -30,25 +25,24 @@ def handleConnection(listenerSocket):
 	(stdioConnection, stdioAddress) = listenerSocket.accept()
 	(stderrConnection, stderrAddress) = listenerSocket.accept()
 
-	print('accepted client connections')
+	print 'accepted client connections'
 
 	try:
 		commandLength = receiveExactly(controlConnection, 8)
-		commandToRun = receiveExactly(controlConnection,
-			int(commandLength)).decode('utf-8')
+		commandToRun = receiveExactly(controlConnection, int(commandLength))
 
-		print('received command: ' + commandToRun)
+		print 'received command: ' + commandToRun
 
 		exitCode = subprocess.call(commandToRun, stdin=stdioConnection,
 			stdout=stdioConnection, stderr=stderrConnection, shell=True)
 
-		controlConnection.send(str(exitCode).encode('ascii'))
+		controlConnection.send(str(exitCode))
 	finally:
 		controlConnection.close()
 		stdioConnection.close()
 		stderrConnection.close()
 
-	print('client connections closed')
+	print 'client connections closed'
 
 
 listenerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -56,12 +50,12 @@ listenerSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
 try:
 	listenerSocket.bind((address, port))
-except socket.error as error:
-	sys.exit('Failed to bind to %s port %d: %s' % (address, port, error))
+except socket.error, msg:
+	sys.exit('Failed to bind to %s port %d: %s' % (address, port, msg[1]))
 
 listenerSocket.listen(3)
 
-print('started listening on address %s port %s' % (address, port))
+print 'started listening on adddress %s port %s' % (address, port)
 
 while True:
 	handleConnection(listenerSocket)
